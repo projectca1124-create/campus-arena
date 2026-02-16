@@ -44,24 +44,66 @@ export default function Waitlist() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+ const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault()
 
-    if (!validateForm()) {
-      return
+  if (!validateForm()) {
+    return
+  }
+
+  setIsLoading(true)
+
+  try {
+    console.log('📝 Submitting form...')
+    
+    // Make API request to backend
+    const response = await fetch('/api/waitlist', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: formData.name,
+        email: formData.email,
+      }),
+    })
+
+    console.log('Response status:', response.status)
+
+    // Parse response
+    const data = await response.json()
+
+    // Check if request was successful
+    if (!response.ok) {
+      console.error('❌ API error:', data.error)
+      throw new Error(data.error || 'Failed to join waitlist')
     }
 
-    setIsLoading(true)
+    console.log('✅ Successfully joined waitlist:', data)
 
+    // Show success screen
+    setSubmitted(true)
+    setIsLoading(false)
+
+    // Auto-redirect to home after 3 seconds
     setTimeout(() => {
-      setSubmitted(true)
-      setIsLoading(false)
-      setTimeout(() => {
-        setFormData({ name: '', email: '' })
-        setSubmitted(false)
-      }, 4000)
-    }, 1000)
+      console.log('🏠 Redirecting to home...')
+      window.location.href = '/'
+    }, 3000)
+
+  } catch (error) {
+    console.error('❌ Error submitting form:', error)
+    
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Something went wrong. Please try again.'
+    
+    setErrors({ 
+      email: errorMessage
+    })
+    setIsLoading(false)
   }
+}
 
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center overflow-hidden py-12 md:py-20">
