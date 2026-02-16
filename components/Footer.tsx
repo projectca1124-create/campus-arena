@@ -1,4 +1,5 @@
-import { Twitter, Linkedin, Instagram, Github, Mail } from 'lucide-react'
+import { X, Linkedin, Instagram, Mail } from 'lucide-react'
+
 
 export default function Footer() {
   return (
@@ -31,12 +32,12 @@ export default function Footer() {
             {/* Social Icons */}
             <div className="flex gap-4">
               <a
-                href="https://twitter.com"
+                href="https://x.com"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors"
-              >
-                <Twitter className="w-5 h-5" />
+               >
+                <img src="/x-logo.png" alt="X" className="w-5 h-5" />
               </a>
               <a
                 href="https://linkedin.com"
@@ -54,14 +55,7 @@ export default function Footer() {
               >
                 <Instagram className="w-5 h-5" />
               </a>
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-10 h-10 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors"
-              >
-                <Github className="w-5 h-5" />
-              </a>
+              
             </div>
           </div>
 
