@@ -35,7 +35,7 @@ export default function Hero() {
               Get Senior Guidance.
             </span>
             <br />
-            Before Day 1.
+            Before Day 0.
           </h1>
 
           {/* Subheadline */}
