@@ -6,14 +6,14 @@ export default function HowItWorks() {
       number: 1,
       icon: GraduationCap,
       title: "Sign Up & Verify",
-      description: "Register with your college email address and get instantly verified as a student. It takes less than 2 minutes to create your profile.",
+      description: "Register with your college email and get instantly verified. Your profile takes less than 2 minutes to set up.",
       color: "from-blue-500 to-blue-600"
     },
     {
       number: 2,
       icon: Users,
       title: "Connect with Classmates",
-      description: "Browse and connect with incoming students in your major, dorm, or interest groups. Build your network before day one.",
+      description: "Browse and connect with incoming students in your major, dorm, or interest groups.",
       color: "from-purple-500 to-purple-600"
     },
     {
@@ -77,14 +77,7 @@ export default function HowItWorks() {
         </div>
 
         {/* CTA */}
-        <div className="text-center">
-          <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-colors shadow-lg hover:shadow-xl">
-            Get Started Now
-          </button>
-          <p className="mt-4 text-gray-500 text-sm">
-            Join thousands of students already on Campus Arena
-          </p>
-        </div>
+        
       </div>
     </section>
   )

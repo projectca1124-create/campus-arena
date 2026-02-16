@@ -19,28 +19,22 @@ const faqs: FAQItem[] = [
   },
   {
     question: "Is Campus Arena free to use?",
-    answer: "Yes! Campus Arena offers a free tier that includes basic features like connecting with classmates and browsing senior profiles. We also offer a premium plan with additional features like priority mentor matching, exclusive events, and career guidance resources."
+    answer: "Yes. Campus Arena is completely free for students."
   },
   {
     question: "How do you verify that users are actual students?",
-    answer: "We verify all users through their college email addresses (.edu domains). Additionally, we cross-reference enrollment data and may require additional verification for certain features. This ensures a safe, authentic community of real students."
+    answer: "We verify all users through their college email addresses (.edu domains)."
   },
+
   {
-    question: "What colleges are supported?",
-    answer: "We currently support over 500 colleges and universities across the United States, with new schools being added regularly. If your school isn't listed, you can request it be added, and we'll prioritize based on demand."
-  },
-  {
-    question: "How does the senior guidance feature work?",
-    answer: "Our senior guidance connects you with verified upperclassmen at your college who volunteer to help incoming students. You can browse senior profiles, see their majors and interests, and reach out with questions about classes, campus life, clubs, and more."
+    question: "How does the campus talks feature work?",
+    answer: "Campus talks connects you with verified upperclassmen at your college who volunteer to help incoming students. You can browse senior profiles, see their majors and interests, and reach out with questions about classes, campus life, clubs, and more."
   },
   {
     question: "Can I use Campus Arena on my phone?",
-    answer: "Absolutely! Campus Arena is fully responsive and works seamlessly on mobile devices. We also have dedicated iOS and Android apps coming soon with push notifications and enhanced mobile features."
+    answer: "Not yet, but you will be the first one to get a reminder once the app version is live."
   },
-  {
-    question: "How do I get started?",
-    answer: "Getting started is easy! Click 'Join the Waitlist' to sign up with your college email. Once verified, you'll get access to create your profile, search for classmates by major or interests, and start connecting. The whole process takes less than 5 minutes."
-  }
+  
 ]
 
 export default function FAQ() {

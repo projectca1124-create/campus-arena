@@ -6,28 +6,28 @@ const features = [
   {
     icon: Users,
     title: 'Find My Classmates',
-    description: 'Discover students by major, batch, or interests. Build your network before orientation even begins.',
+    description: 'Discover students by major, class, or interests.Start building your circle before orientation even begins.',
     color: 'from-blue-500 to-blue-600',
     bgColor: 'bg-blue-50',
   },
   {
     icon: MessageSquare,
     title: 'Seniors on Demand',
-    description: 'Ask questions and get real answers from verified seniors. Get insider tips on classes, professors, and campus life.',
+    description: 'Ask verified seniors anything — classes, professors, housing, clubs. Get real answers from people who’ve already lived it.',
     color: 'from-purple-500 to-purple-600',
     bgColor: 'bg-purple-50',
   },
   {
     icon: Newspaper,
     title: 'Campus Feed',
-    description: 'A clean feed for questions, tips, and campus life discussions. Stay connected with your campus community.',
+    description: 'A clean, curated feed for questions, tips, and campus life. Stay in the loop and never feel lost again.',
     color: 'from-pink-500 to-pink-600',
     bgColor: 'bg-pink-50',
   },
   {
     icon: Calendar,
     title: 'Clubs & Events',
-    description: 'Discover campus communities and events early. Find your people and start getting involved from day one.',
+    description: 'Explore campus communities early and find your people. Join events, meet leaders, and get involved from day one.',
     color: 'from-indigo-500 to-indigo-600',
     bgColor: 'bg-indigo-50',
   },
@@ -46,8 +46,8 @@ export default function Features() {
             </span>
           </h2>
           <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
-            Campus Arena gives you the tools to build meaningful connections 
-            and get the inside scoop before you even step on campus.
+            Campus Arena gives you the tools to meet classmates, get insider guidance, and feel ready before you step on campus.
+
           </p>
         </div>
 
@@ -80,18 +80,7 @@ export default function Features() {
           })}
         </div>
 
-        {/* Bottom CTA */}
-        <div className="mt-16 text-center">
-          <p className="text-gray-600 mb-6">
-            Ready to connect with your future classmates?
-          </p>
-          <a
-            href="/waitlist"
-            className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-lg hover:shadow-2xl hover:scale-105 transition-all duration-300"
-          >
-            Join the Waitlist
-          </a>
-        </div>
+
       </div>
     </section>
   )

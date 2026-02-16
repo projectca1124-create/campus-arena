@@ -79,16 +79,8 @@ export default function Footer() {
                   How It Works
                 </a>
               </li>
-              <li>
-                <a href="#pricing" className="hover:text-white transition-colors">
-                  Pricing
-                </a>
-              </li>
-              <li>
-                <a href="#testimonials" className="hover:text-white transition-colors">
-                  Testimonials
-                </a>
-              </li>
+              
+      
               <li>
                 <a href="#faq" className="hover:text-white transition-colors">
                   FAQ
@@ -106,11 +98,7 @@ export default function Footer() {
                   About Us
                 </a>
               </li>
-              <li>
-                <a href="#blog" className="hover:text-white transition-colors">
-                  Blog
-                </a>
-              </li>
+  
               <li>
                 <a href="#careers" className="hover:text-white transition-colors">
                   Careers
@@ -121,46 +109,12 @@ export default function Footer() {
                   Contact
                 </a>
               </li>
-              <li>
-                <a href="#press" className="hover:text-white transition-colors">
-                  Press Kit
-                </a>
-              </li>
+
             </ul>
           </div>
 
           {/* Support Column */}
-          <div>
-            <h4 className="text-white font-semibold mb-4">Support</h4>
-            <ul className="space-y-3">
-              <li>
-                <a href="#help" className="hover:text-white transition-colors">
-                  Help Center
-                </a>
-              </li>
-              <li>
-                <a href="#safety" className="hover:text-white transition-colors">
-                  Safety & Security
-                </a>
-              </li>
-              <li>
-                <a href="#community" className="hover:text-white transition-colors">
-                  Community Guidelines
-                </a>
-              </li>
-              <li>
-                <a href="#colleges" className="hover:text-white transition-colors">
-                  For Colleges
-                </a>
-              </li>
-              <li>
-                <a href="mailto:support@campusarena.com" className="hover:text-white transition-colors flex items-center gap-1">
-                  <Mail className="w-4 h-4" />
-                  Support
-                </a>
-              </li>
-            </ul>
-          </div>
+        
         </div>
       </div>
 
