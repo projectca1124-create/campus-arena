@@ -1,5 +1,7 @@
-import { sendEmail } from './gmail'
+import { Resend } from 'resend'
 import { userWaitlistEmail, adminWaitlistEmail } from './templates'
+
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function sendWaitlistEmails({
   userName,
@@ -11,17 +13,27 @@ export async function sendWaitlistEmails({
   try {
     console.log('📧 Preparing to send emails...')
     
-    await sendEmail({
+    const userEmailResponse = await resend.emails.send({
+      from: 'Campus Arena <onboarding@resend.dev>',
       to: userEmail,
       ...userWaitlistEmail(userName)
     })
 
+    if (userEmailResponse.error) {
+      throw new Error(`User email failed: ${userEmailResponse.error.message}`)
+    }
+
     console.log('✅ User email sent successfully!')
 
-    await sendEmail({
+    const adminEmailResponse = await resend.emails.send({
+      from: 'Campus Arena <onboarding@resend.dev>',
       to: process.env.ADMIN_EMAIL || 'admin@campusarena.com',
       ...adminWaitlistEmail(userName, userEmail)
     })
+
+    if (adminEmailResponse.error) {
+      throw new Error(`Admin email failed: ${adminEmailResponse.error.message}`)
+    }
 
     console.log('✅ Admin email sent successfully!')
     
