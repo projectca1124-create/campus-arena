@@ -6,14 +6,14 @@ const features = [
   {
     icon: Users,
     title: 'Find My Classmates',
-    description: 'Discover students by major, class, or interests.Start building your circle before orientation even begins.',
+    description: 'Stop arriving alone. Know 5-10 people in your dorm, major, and hometown before orientation even starts.',
     color: 'from-blue-500 to-blue-600',
     bgColor: 'bg-blue-50',
   },
   {
     icon: MessageSquare,
     title: 'Seniors on Demand',
-    description: 'Ask verified seniors anything — classes, professors, housing, clubs. Get real answers from people who’ve already lived it.',
+    description: 'Ask anything. Get real answers in minutes from seniors who already lived it — not AI, not forums, real people.',
     color: 'from-purple-500 to-purple-600',
     bgColor: 'bg-purple-50',
   },

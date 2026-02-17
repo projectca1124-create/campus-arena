@@ -33,7 +33,7 @@ export default function Hero() {
           {/* Subheadline */}
           <div className="mb-12 max-w-3xl mx-auto">
             <p className="text-lg sm:text-xl md:text-2xl text-gray-600 mb-4 leading-relaxed font-semibold">
-              Feel prepared, connected, and confident.
+              College is overwhelming. Campus Arena makes it easier — before you even arrive.
             </p>
           </div>
 
@@ -57,10 +57,10 @@ export default function Hero() {
                 <Users className="h-6 w-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">
-                Verified Students Only
+                Connect Before Day 1
               </h3>
               <p className="text-gray-600 text-center leading-relaxed">
-                Every member is verified with a college email — no spam, no fake accounts.
+                Meet 5-10 classmates before orientation. No awkward first-day intros.
               </p>
             </div>
 
@@ -70,10 +70,10 @@ export default function Hero() {
                 <MessageCircle className="h-6 w-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">
-                Ask Seniors Anything
+                Verified Seniors, Real Answers
               </h3>
               <p className="text-gray-600 text-center leading-relaxed">
-                Get real answers about classes, housing, clubs, and campus life.
+                Ask anything. Get responses from students who've already taken your classes, lived in your dorm, chosen your major.
               </p>
             </div>
 
@@ -83,10 +83,10 @@ export default function Hero() {
                 <Calendar className="h-6 w-6 text-white" />
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">
-                Connect Early
+                Find Your People Instantly
               </h3>
               <p className="text-gray-600 text-center leading-relaxed">
-                Meet classmates who share your major, class, interests, or hometown.
+                Discover classmates by major, dorm, hometown, interests. Your campus community is waiting.
               </p>
             </div>
           </div>

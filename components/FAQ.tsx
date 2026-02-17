@@ -2,46 +2,109 @@
 
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import Link from 'next/link'
 
 interface FAQItem {
   question: string
   answer: string
 }
 
-const faqs: FAQItem[] = [
-  {
-    question: "What is Campus Arena?",
-    answer: "Campus Arena is a platform designed to help incoming college students connect with their future classmates and get guidance from seniors before Day 1. We make the transition to college smoother by building your network early."
-  },
-  {
-    question: "When should I join Campus Arena?",
-    answer: "The best time to join is as soon as you've been accepted to your college. This gives you maximum time to connect with classmates, ask questions to seniors, and prepare for your first semester. Most students join 2-6 months before their start date."
-  },
-  {
-    question: "Is Campus Arena free to use?",
-    answer: "Yes. Campus Arena is completely free for students."
-  },
-  {
-    question: "How do you verify that users are actual students?",
-    answer: "We verify all users through their college email addresses (.edu domains)."
-  },
+interface FAQSection {
+  title: string
+  faqs: FAQItem[]
+}
 
+const faqSections: FAQSection[] = [
   {
-    question: "How does the campus talks feature work?",
-    answer: "Campus talks connects you with verified upperclassmen at your college who volunteer to help incoming students. You can browse senior profiles, see their majors and interests, and reach out with questions about classes, campus life, clubs, and more."
+    title: "🚀 Getting Started",
+    faqs: [
+      {
+        question: "What is Campus Arena?",
+        answer: "A private, verified space where you can meet classmates, get real guidance from upperclassmen before Day 1, and stay connected through clubs, events, and communities throughout your entire degree."
+      },
+      {
+        question: "Is it free?",
+        answer: "Yes. Campus Arena is free for all students."
+      },
+      {
+        question: "How do you verify students?",
+        answer: "Everyone signs up with their official college email, so you're only connecting with real students from your campus."
+      }
+    ]
   },
   {
-    question: "Can I use Campus Arena on my phone?",
-    answer: "Not yet, but you will be the first one to get a reminder once the app version is live."
+    title: "👋 For Incoming Freshmen",
+    faqs: [
+      {
+        question: "Will seniors actually answer my questions?",
+        answer: "Yes. The upperclassmen here join because they want to help. They've been through the same confusion and know how much a simple answer can help."
+      },
+      {
+        question: "Can I meet people before I arrive?",
+        answer: "Definitely. You can find classmates by major, class year, interests, or hometown — long before orientation starts."
+      },
+      {
+        question: "What if I'm too shy to ask?",
+        answer: "That's normal. You can start quietly, read what others are asking, or message a senior privately. There's no pressure to speak up until you're comfortable."
+      }
+    ]
+  },
+  {
+    title: "🔄 For Transfer Students",
+    faqs: [
+      {
+        question: "Is this useful for transfers?",
+        answer: "Absolutely. Transfers often arrive knowing fewer people than freshmen. This helps you plug into your new campus faster."
+      },
+      {
+        question: "Can I find other transfer students?",
+        answer: "Yes. You can filter by class year and interests to meet other transfers right away."
+      }
+    ]
+  },
+  {
+    title: "🎓 For Upperclassmen",
+    faqs: [
+      {
+        question: "Why should I join as a senior?",
+        answer: "To make the transition easier for new students and to share the advice you wish someone gave you. It's a simple way to give back to your campus."
+      },
+      {
+        question: "Do I get anything out of helping?",
+        answer: "Yes. Leadership experience, visibility, and the chance to make a real impact on incoming students."
+      }
+    ]
+  },
+  {
+    title: "🔒 Safety & Privacy",
+    faqs: [
+      {
+        question: "Is Campus Arena safe?",
+        answer: "Yes. Only verified students can join, which keeps the community authentic and reduces noise."
+      },
+      {
+        question: "What about my data?",
+        answer: "Your information stays private. Only students from your campus can see your profile, and nothing is shared with outside parties."
+      },
+    ]
   },
   
 ]
 
 export default function FAQ() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
 
-  const toggleFAQ = (index: number) => {
-    setOpenIndex(openIndex === index ? null : index)
+  const toggleSection = (sectionTitle: string) => {
+    setOpenSections(prev => {
+      // Close all sections first
+      const newState: Record<string, boolean> = {}
+      Object.keys(prev).forEach(key => {
+        newState[key] = false
+      })
+      // Toggle the clicked section
+      newState[sectionTitle] = !prev[sectionTitle]
+      return newState
+    })
   }
 
   return (
@@ -52,60 +115,68 @@ export default function FAQ() {
           <h2 className="text-4xl font-bold text-gray-900 mb-4">
             Frequently Asked Questions
           </h2>
-          <p className="text-xl text-gray-600">
+          <p className="text-xl text-gray-600 mb-6">
             Everything you need to know about Campus Arena
           </p>
+          <Link 
+            href="/story"
+            className="inline-block text-blue-600 hover:text-blue-700 font-semibold underline"
+          >
+            Want to know why we built this? Click here →
+          </Link>
         </div>
 
-        {/* FAQ Accordion */}
-        <div className="space-y-4">
-          {faqs.map((faq, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:border-gray-300 transition-colors"
-            >
-              {/* Question Button */}
-              <button
-                onClick={() => toggleFAQ(index)}
-                className="w-full px-6 py-5 flex items-center justify-between text-left hover:bg-gray-50 transition-colors"
-              >
-                <span className="text-lg font-semibold text-gray-900 pr-8">
-                  {faq.question}
-                </span>
-                <ChevronDown
-                  className={`w-5 h-5 text-gray-500 flex-shrink-0 transition-transform duration-200 ${
-                    openIndex === index ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
+        {/* FAQ Sections */}
+        <div className="space-y-6">
+          {faqSections.map((section, sectionIndex) => {
+            const isSectionOpen = openSections[section.title] || false
 
-              {/* Answer */}
-              <div
-                className={`transition-all duration-200 ease-in-out ${
-                  openIndex === index
-                    ? 'max-h-96 opacity-100'
-                    : 'max-h-0 opacity-0'
-                }`}
-              >
-                <div className="px-6 pb-5 pt-0">
-                  <p className="text-gray-600 leading-relaxed">
-                    {faq.answer}
-                  </p>
-                </div>
+            return (
+              <div key={sectionIndex}>
+                {/* Section Header - Only This Needs Click */}
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="w-full px-6 py-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 hover:border-blue-400 transition-all hover:shadow-md flex items-center justify-between mb-4"
+                >
+                  <span className="text-lg font-bold text-gray-900">
+                    {section.title}
+                  </span>
+                  <ChevronDown
+                    className={`w-5 h-5 text-blue-600 flex-shrink-0 transition-transform duration-300 ${
+                      isSectionOpen ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Questions & Answers - Line by Line */}
+                {isSectionOpen && (
+                  <div className="space-y-6 pl-4 border-l-2 border-blue-200">
+                    {section.faqs.map((faq, faqIndex) => (
+                      <div key={faqIndex}>
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                          {faq.question}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {faq.answer}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* CTA */}
-        <div className="mt-12 text-center">
-          <p className="text-gray-600 mb-4">Still have questions?</p>
-          <a
-            href="mailto:support@campusarena.com"
-            className="text-blue-600 hover:text-blue-700 font-semibold"
+        <div className="mt-16 text-center">
+          <p className="text-gray-600 mb-4">Have a different question/suggestions?</p>
+          <Link
+            href="/contact"
+            className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-2"
           >
-            Contact our support team →
-          </a>
+            Get in touch →
+          </Link>
         </div>
       </div>
     </section>

@@ -1,5 +1,5 @@
-import { X, Linkedin, Instagram, Mail } from 'lucide-react'
-
+import { Linkedin, Instagram } from 'lucide-react'
+import Link from 'next/link'
 
 export default function Footer() {
   return (
@@ -55,7 +55,6 @@ export default function Footer() {
               >
                 <Instagram className="w-5 h-5" />
               </a>
-              
             </div>
           </div>
 
@@ -73,8 +72,6 @@ export default function Footer() {
                   How It Works
                 </a>
               </li>
-              
-      
               <li>
                 <a href="#faq" className="hover:text-white transition-colors">
                   FAQ
@@ -88,27 +85,24 @@ export default function Footer() {
             <h4 className="text-white font-semibold mb-4">Company</h4>
             <ul className="space-y-3">
               <li>
-                <a href="#about" className="hover:text-white transition-colors">
-                  About Us
-                </a>
+                <Link href="/story" className="hover:text-white transition-colors">
+                  Our Story
+                </Link>
               </li>
-  
               <li>
                 <a href="#careers" className="hover:text-white transition-colors">
                   Careers
                 </a>
               </li>
               <li>
-                <a href="#contact" className="hover:text-white transition-colors">
+                <Link href="/contact" className="hover:text-white transition-colors">
                   Contact
-                </a>
+                </Link>
               </li>
-
             </ul>
           </div>
 
-          {/* Support Column */}
-        
+          {/* Support Column - empty for now */}
         </div>
       </div>
 
