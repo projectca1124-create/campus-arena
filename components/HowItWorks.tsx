@@ -1,76 +1,88 @@
-import { GraduationCap, Users, Lightbulb, ArrowRight } from 'lucide-react'
+'use client'
+
+import { useState } from 'react'
+import { Mail, Users, MessageCircle, Lightbulb } from 'lucide-react'
 
 export default function HowItWorks() {
+  const [hoveredStep, setHoveredStep] = useState<number | null>(null)
+
   const steps = [
     {
-      number: 1,
-      icon: GraduationCap,
-      title: "Sign Up & Verify",
-      description: "Register with your college email and get instantly verified. Your profile takes less than 2 minutes to set up.",
-      color: "from-blue-500 to-blue-600"
+      id: 1,
+      icon: Mail,
+      title: "Verify your campus",
+      description: "Sign up with your college email and join your verified campus community instantly.",
+      color: "bg-blue-100 hover:bg-blue-200",
+      iconColor: "text-blue-600"
     },
     {
-      number: 2,
+      id: 2,
       icon: Users,
-      title: "Connect with Classmates",
-      description: "Browse and connect with incoming students in your major, dorm, or interest groups.",
-      color: "from-purple-500 to-purple-600"
+      title: "Join your class",
+      description: "Connect with incoming freshmen in your major, dorm, or interest groups.",
+      color: "bg-purple-100 hover:bg-purple-200",
+      iconColor: "text-purple-600"
     },
     {
-      number: 3,
+      id: 3,
+      icon: MessageCircle,
+      title: "Meet classmates",
+      description: "Browse profiles and send connection requests to build your network before arrival.",
+      color: "bg-orange-100 hover:bg-orange-200",
+      iconColor: "text-orange-600"
+    },
+    {
+      id: 4,
       icon: Lightbulb,
-      title: "Get Senior Guidance",
-      description: "Ask questions and receive advice from verified upperclassmen. Learn about classes, clubs, campus life, and insider tips.",
-      color: "from-orange-500 to-orange-600"
+      title: "Ask seniors",
+      description: "Get real advice from verified upperclassmen about classes, housing, and campus life.",
+      color: "bg-green-100 hover:bg-green-200",
+      iconColor: "text-green-600"
     }
   ]
 
   return (
-    <section id="how-it-works" className="py-20 px-6 bg-white">
+    <section id="how-it-works" className="py-16 px-6 bg-white">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">
-            How It Works
+        <div className="text-center mb-12">
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3">
+            How it works
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Start connecting with your college community in three simple steps
+          <p className="text-lg text-gray-600">
+            Get started in minutes. No complicated setup required.
           </p>
         </div>
 
-        {/* Steps */}
-        <div className="grid md:grid-cols-3 gap-8 mb-12">
+        {/* 4 Boxes in One Row */}
+        <div className="grid grid-cols-4 gap-5">
           {steps.map((step, index) => {
             const Icon = step.icon
+            const isHovered = hoveredStep === index
+
             return (
-              <div key={index} className="relative">
-                {/* Connecting Arrow (desktop only) */}
-                {index < steps.length - 1 && (
-                  <div className="hidden md:block absolute top-24 -right-4 z-0">
-                    <ArrowRight className="w-8 h-8 text-gray-300" />
-                  </div>
-                )}
-
-                {/* Card */}
-                <div className="relative z-10 bg-white rounded-2xl p-8 border-2 border-gray-100 hover:border-gray-200 transition-all hover:shadow-lg">
-                  {/* Step Number */}
-                  <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-gray-900 to-gray-700 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                    {step.number}
-                  </div>
-
-                  {/* Icon */}
-                  <div className={`w-16 h-16 bg-gradient-to-br ${step.color} rounded-xl flex items-center justify-center mb-6 shadow-lg`}>
-                    <Icon className="w-8 h-8 text-white" />
-                  </div>
-
-                  {/* Content */}
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
-                    {step.title}
-                  </h3>
-                  <p className="text-gray-600 leading-relaxed">
-                    {step.description}
-                  </p>
+              <div
+                key={step.id}
+                onMouseEnter={() => setHoveredStep(index)}
+                onMouseLeave={() => setHoveredStep(null)}
+                className={`rounded-2xl p-6 transition-all duration-300 cursor-pointer ${step.color} ${
+                  isHovered ? 'shadow-lg scale-105' : 'shadow-md'
+                }`}
+              >
+                {/* Icon at Top */}
+                <div className={`mb-4 transition-transform duration-300 ${isHovered ? 'scale-110' : 'scale-100'}`}>
+                  <Icon className={`w-7 h-7 ${step.iconColor}`} />
                 </div>
+
+                {/* Title */}
+                <h3 className="text-base font-bold text-gray-900 mb-2">
+                  {step.title}
+                </h3>
+
+                {/* Description */}
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {step.description}
+                </p>
               </div>
             )
           })}

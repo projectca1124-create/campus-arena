@@ -32,13 +32,13 @@ export const userWaitlistEmail = (name: string) => ({
             
             <h2>What's Next?</h2>
             <ul>
-              <li>✅ You'll get early access on <strong>March 1st</strong></li>
-              <li>✅ Be among the first to connect with your classmates</li>
-              <li>✅ Ask seniors anything about campus life</li>
-              <li>✅ Build your network before orientation</li>
+              <li>✅ You'll be notified as soon as the Campus Arena MVP is live for you</li>
+              <li>✅ You'll be able to connect with students across all class years</li>
+              <li>✅ You can ask or answer questions about classes, clubs, and campus life</li>
+              <li>✅ You'll help build a stronger, more supportive campus community</li>
             </ul>
             
-            <p>Mark your calendar for <strong>March 1st</strong> - that's when Campus Arena launches exclusively for your campus!</p>
+            <p>We're excited to have you with us. Big things are coming.</p>
             
             <h2>In the Meantime...</h2>
             <p>Tell your friends about Campus Arena! The more students from your campus join, the better the community will be.</p>
