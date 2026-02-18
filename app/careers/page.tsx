@@ -21,14 +21,14 @@ const jobPostings: JobPosting[] = [
     id: '1',
     title: 'Marketing Lead',
     location: 'Tempe, Arizona / Remote',
-    type: 'Intern',
+    type: 'Full Time',
     department: 'Marketing',
     description: 'Be the first marketing hire at Campus Arena. We\'re looking for someone who can wear multiple hats, build our brand from the ground up, and lead campus marketing efforts across ASU and beyond. You\'ll drive growth, manage our social presence, hire and mentor marketing interns, and help shape how students discover Campus Arena. This is a hands-on role where your impact will be immediate and visible.',
     responsibilities: [
       'Lead all marketing initiatives and build our brand presence at campus',
-      'Manage and grow our social media platforms (Instagram, LinkedIn, X)',
+      'Manage and grow our social media platforms (Instagram, TikTok, LinkedIn, X)',
       'Create engaging content that resonates with college students',
-      'Recruit, hire, and mentor marketing interns',
+      'Recruit, hire, and mentor marketing interns and campus ambassadors',
       'Plan and execute campus events and activations',
       'Analyze data and optimize campaigns for better results',
       'Collaborate with product and operations teams'
@@ -42,6 +42,35 @@ const jobPostings: JobPosting[] = [
       'Passion for college and campus communities'
     ],
     compensation: 'At this time, equity stake will be provided in Campus Arena. When we secure funding, we\'ll move to salary + equity compensation. Please note: equity may be diluted in future funding rounds.'
+  },
+  {
+    id: '2',
+    title: 'Campus Ambassador',
+    location: 'Multiple Campuses (Remote/On-Campus)',
+    type: 'Part Time Volunteer',
+    department: 'Marketing',
+    description: 'Be the face of Campus Arena at your campus. We\'re looking for passionate students with marketing experience who can represent Campus Arena, grow our community, and help incoming students discover the platform. You\'ll work directly with our Marketing Lead to execute campus strategies, host events, and build genuine connections with students. This role is perfect for marketing-minded community builders who want to make a real impact on their campus.',
+    responsibilities: [
+      'Execute marketing campaigns and initiatives on your campus',
+      'Represent Campus Arena at campus events and orientations',
+      'Recruit and onboard new students to the platform',
+      'Host Campus Arena events, workshops, and activations',
+      'Gather student feedback and insights for the marketing team',
+      'Grow social media engagement and community presence',
+      'Build relationships with campus organizations and clubs',
+      'Support the Marketing Lead with content creation and promotion',
+      'Track campaign performance and report results'
+    ],
+    qualifications: [
+      'Current college/university student with marketing background or experience',
+      'Strong communication and interpersonal skills',
+      'Proven ability to engage and recruit people',
+      'Self-motivated and able to work independently',
+      'Experience in marketing, events, or community engagement',
+      'Understanding of social media and digital marketing',
+      'Genuine passion for helping fellow students succeed'
+    ],
+    compensation: 'This is an unpaid volunteer role. Once we secure funding, this position will convert to a paid, full-time role with salary.'
   }
 ]
 
@@ -164,7 +193,7 @@ export default function CareersPage() {
                           Send us your resume and a quick note about why you're interested in building Campus Arena with us.
                         </p>
                         <a
-                          href={`mailto:careers@campusarena.com?subject=Application: ${job.title}`}
+                          href={`mailto:projectca1124@gmail.com?subject=Application: ${job.title}`}
                           className="inline-block text-blue-600 hover:text-blue-700 font-semibold text-sm"
                         >
                           projectca1124@gmail.com
