@@ -1,7 +1,60 @@
+'use client'
+
 import { Linkedin, Instagram } from 'lucide-react'
 import Link from 'next/link'
+import { useState } from 'react'
 
 export default function Footer() {
+  const [email, setEmail] = useState('')
+  const [subscribed, setSubscribed] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    // Validate email
+    if (!email) {
+      setError('Please enter your email')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email')
+      setTimeout(() => setError(''), 3000)
+      return
+    }
+
+    setIsLoading(true)
+
+    try {
+      // Optional: Send to your backend or email service
+      // const response = await fetch('/api/subscribe', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ email })
+      // })
+
+      // For now, just simulate success
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      setEmail('')
+      setSubscribed(true)
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setSubscribed(false)
+      }, 3000)
+    } catch (err) {
+      setError('Something went wrong. Please try again.')
+      setTimeout(() => setError(''), 3000)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <footer id="contact" className="bg-gray-900 text-gray-300">
       {/* Main Footer Content */}
@@ -17,16 +70,52 @@ export default function Footer() {
             {/* Newsletter Signup */}
             <div className="mb-6">
               <p className="text-sm font-semibold text-white mb-2">Join our newsletter</p>
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  placeholder="Enter your email"
-                  className="flex-1 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-                />
-                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors whitespace-nowrap">
-                  Subscribe
-                </button>
-              </div>
+              <form onSubmit={handleSubscribe}>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoading}
+                    className="flex-1 px-4 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500 text-white rounded-lg font-semibold transition-colors whitespace-nowrap disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span className="hidden sm:inline">Subscribing...</span>
+                      </>
+                    ) : (
+                      'Subscribe'
+                    )}
+                  </button>
+                </div>
+
+                {/* Success Message */}
+                {subscribed && (
+                  <div className="animate-fade-in-out text-green-400 text-sm font-medium flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Thanks for subscribing! 🎉
+                  </div>
+                )}
+
+                {/* Error Message */}
+                {error && (
+                  <div className="animate-fade-in-out text-red-400 text-sm font-medium flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    {error}
+                  </div>
+                )}
+              </form>
             </div>
 
             {/* Social Icons */}
@@ -36,7 +125,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors"
-               >
+              >
                 <img src="/x-logo.png" alt="X" className="w-5 h-5" />
               </a>
               <a
@@ -130,6 +219,32 @@ export default function Footer() {
           </div>
         </div>
       </div>
+
+      {/* Animation Styles */}
+      <style jsx>{`
+        @keyframes fadeInOut {
+          0% {
+            opacity: 0;
+            transform: translateY(-5px);
+          }
+          10% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          90% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-5px);
+          }
+        }
+
+        .animate-fade-in-out {
+          animation: fadeInOut 3s ease-in-out forwards;
+        }
+      `}</style>
     </footer>
   )
 }
