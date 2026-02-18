@@ -10,7 +10,9 @@ export default function ContactPage() {
     email: '',
     message: ''
   })
+  const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -18,23 +20,57 @@ export default function ContactPage() {
       ...prev,
       [name]: value
     }))
+    setError('')
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // You can add your form submission logic here
-    console.log('Form submitted:', formData)
-    setSubmitted(true)
-    setFormData({ name: '', email: '', message: '' })
-    
-    // Reset success message after 3 seconds
-    setTimeout(() => setSubmitted(false), 3000)
+    setLoading(true)
+    setError('')
+
+    try {
+      if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) {
+        throw new Error('Please fill in all fields')
+      }
+
+      if (formData.name.trim().length < 2) {
+        throw new Error('Name must be at least 2 characters')
+      }
+
+      if (formData.message.trim().length < 10) {
+        throw new Error('Message must be at least 10 characters')
+      }
+
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send message')
+      }
+
+      setSubmitted(true)
+      setFormData({ name: '', email: '', message: '' })
+
+      setTimeout(() => setSubmitted(false), 5000)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong'
+      setError(message)
+      console.error('Contact form error:', err)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 py-20 px-6">
       <div className="max-w-2xl mx-auto">
-        {/* Back Button */}
         <Link 
           href="/"
           className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-semibold mb-12 transition-colors"
@@ -43,7 +79,6 @@ export default function ContactPage() {
           Back to Home
         </Link>
 
-        {/* Header */}
         <div className="text-center mb-16">
           <h1 className="text-5xl font-bold text-gray-900 mb-4">
             Get in <span className="text-blue-600">touch</span>
@@ -53,7 +88,6 @@ export default function ContactPage() {
           </p>
         </div>
 
-        {/* Form Container */}
         <div className="bg-white rounded-lg border border-gray-200 p-8 shadow-sm">
           {submitted ? (
             <div className="text-center py-12">
@@ -63,11 +97,17 @@ export default function ContactPage() {
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Message sent!</h3>
-              <p className="text-gray-600">Thanks for reaching out. We'll get back to you soon.</p>
+              <p className="text-gray-600 mb-4">Thanks for reaching out. We'll get back to you soon.</p>
+              <p className="text-sm text-gray-500">Check your email for a confirmation message from us.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Name Field */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-800 font-medium">❌ {error}</p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Name
@@ -79,11 +119,11 @@ export default function ContactPage() {
                   onChange={handleChange}
                   placeholder="Your name"
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
-              {/* Email Field */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Email
@@ -95,11 +135,11 @@ export default function ContactPage() {
                   onChange={handleChange}
                   placeholder="you@example.com"
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                  disabled={loading}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
               </div>
 
-              {/* Message Field */}
               <div>
                 <label className="block text-sm font-semibold text-gray-900 mb-2">
                   Message
@@ -108,25 +148,32 @@ export default function ContactPage() {
                   name="message"
                   value={formData.message}
                   onChange={handleChange}
-                  placeholder="How can we help you?"
+                  placeholder="How can we help you? (min 10 characters)"
                   required
+                  disabled={loading}
                   rows={6}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Minimum 10 characters
+                </p>
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                disabled={loading}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Send Message
+                {loading ? 'Sending...' : 'Send Message'}
               </button>
+
+              <p className="text-xs text-gray-500 text-center">
+                We respect your privacy and will only use your email to respond to your inquiry.
+              </p>
             </form>
           )}
         </div>
 
-        {/* Direct Email */}
         <div className="text-center mt-8">
           <p className="text-gray-600 mb-2">Or email us directly at</p>
           <a 
