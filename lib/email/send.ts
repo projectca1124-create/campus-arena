@@ -13,8 +13,9 @@ export async function sendWaitlistEmails({
   try {
     console.log('📧 Preparing to send emails...')
     
+    // Send email to user
     const userEmailResponse = await resend.emails.send({
-      from: 'Campus Arena <onboarding@resend.dev>',
+      from: 'noreply@campusarena.co', // ✅ Changed to your domain!
       to: userEmail,
       ...userWaitlistEmail(userName)
     })
@@ -23,11 +24,12 @@ export async function sendWaitlistEmails({
       throw new Error(`User email failed: ${userEmailResponse.error.message}`)
     }
 
-    console.log('✅ User email sent successfully!')
+    console.log('✅ User email sent successfully to:', userEmail)
 
+    // Send email to admin
     const adminEmailResponse = await resend.emails.send({
-      from: 'Campus Arena <onboarding@resend.dev>',
-      to: process.env.ADMIN_EMAIL || 'admin@campusarena.com',
+      from: 'noreply@campusarena.co', // ✅ Changed to your domain!
+      to: process.env.ADMIN_EMAIL || 'admin@campusarena.co',
       ...adminWaitlistEmail(userName, userEmail)
     })
 
@@ -35,7 +37,7 @@ export async function sendWaitlistEmails({
       throw new Error(`Admin email failed: ${adminEmailResponse.error.message}`)
     }
 
-    console.log('✅ Admin email sent successfully!')
+    console.log('✅ Admin email sent successfully to:', process.env.ADMIN_EMAIL)
     
     return true
   } catch (error) {

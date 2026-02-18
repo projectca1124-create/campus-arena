@@ -23,3 +23,15 @@ model Admin {
   email String @unique @db.VarChar(255)
   name  String @db.VarChar(255)
 }
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([createdAt])
+}
