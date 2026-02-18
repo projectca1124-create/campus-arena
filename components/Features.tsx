@@ -40,9 +40,10 @@ export default function Features() {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Connect with classmates early  
+            Walk Into Campus as a Friend, Not a Stranger
+ 
             <span className="block bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
-              Build Your Network All Four Years.
+              Start Your Freshman Year Connected
             </span>
           </h2>
           <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
