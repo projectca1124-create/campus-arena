@@ -22,6 +22,7 @@ export default function Navbar() {
     { name: 'Features', href: '#features' },
     { name: 'How It Works', href: '#how-it-works' },
     { name: 'FAQ', href: '#faq' },
+    { name: 'Careers', href: '/careers' },
     { name: 'Contact', href: '#contact' },
   ]
 
@@ -65,20 +66,29 @@ export default function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={(e) => handleSmoothScroll(e, link.href)}
-                className="text-gray-600 hover:text-gray-900 transition-colors duration-200 font-medium cursor-pointer"
-              >
-                {link.name}
-              </a>
+              <div key={link.name}>
+                {link.href.startsWith('#') ? (
+                  <a
+                    href={link.href}
+                    onClick={(e) => handleSmoothScroll(e, link.href)}
+                    className="text-gray-600 hover:text-gray-900 transition-colors duration-200 font-medium cursor-pointer"
+                  >
+                    {link.name}
+                  </a>
+                ) : (
+                  <Link
+                    href={link.href}
+                    className="text-gray-600 hover:text-gray-900 transition-colors duration-200 font-medium"
+                  >
+                    {link.name}
+                  </Link>
+                )}
+              </div>
             ))}
           </div>
 
           {/* Desktop CTA Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-
             <Link
               href="/waitlist"
               className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
@@ -107,23 +117,27 @@ export default function Navbar() {
         <div className="md:hidden bg-white border-t border-gray-100">
           <div className="px-4 py-3 space-y-3">
             {navLinks.map((link) => (
-              <a
-                key={link.name}
-                href={link.href}
-                onClick={(e) => handleSmoothScroll(e, link.href)}
-                className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors font-medium cursor-pointer"
-              >
-                {link.name}
-              </a>
+              <div key={link.name}>
+                {link.href.startsWith('#') ? (
+                  <a
+                    href={link.href}
+                    onClick={(e) => handleSmoothScroll(e, link.href)}
+                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors font-medium cursor-pointer"
+                  >
+                    {link.name}
+                  </a>
+                ) : (
+                  <Link
+                    href={link.href}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors font-medium"
+                  >
+                    {link.name}
+                  </Link>
+                )}
+              </div>
             ))}
             <div className="pt-3 space-y-2">
-              <Link
-                href="/login"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="block px-4 py-2 text-center text-gray-600 hover:bg-gray-50 rounded-lg transition-colors font-medium"
-              >
-                Log in
-              </Link>
               <Link
                 href="/waitlist"
                 onClick={() => setIsMobileMenuOpen(false)}
