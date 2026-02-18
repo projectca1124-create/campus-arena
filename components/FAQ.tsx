@@ -88,7 +88,6 @@ const faqSections: FAQSection[] = [
       },
     ]
   },
-  
 ]
 
 export default function FAQ() {
@@ -96,22 +95,20 @@ export default function FAQ() {
 
   const toggleSection = (sectionTitle: string) => {
     setOpenSections(prev => {
-      // Close all sections first
       const newState: Record<string, boolean> = {}
       Object.keys(prev).forEach(key => {
         newState[key] = false
       })
-      // Toggle the clicked section
       newState[sectionTitle] = !prev[sectionTitle]
       return newState
     })
   }
 
   return (
-    <section id="faq" className="py-20 px-6 bg-gradient-to-b from-white to-gray-50">
-      <div className="max-w-4xl mx-auto">
+    <section id="faq" className="min-h-screen flex items-center py-16 px-6 bg-white">
+      <div className="w-full max-w-4xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">
             Frequently Asked Questions
           </h2>
@@ -133,7 +130,7 @@ export default function FAQ() {
 
             return (
               <div key={sectionIndex}>
-                {/* Section Header - Only This Needs Click */}
+                {/* Section Header */}
                 <button
                   onClick={() => toggleSection(section.title)}
                   className="w-full px-6 py-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200 hover:border-blue-400 transition-all hover:shadow-md flex items-center justify-between mb-4"
@@ -148,7 +145,7 @@ export default function FAQ() {
                   />
                 </button>
 
-                {/* Questions & Answers - Line by Line */}
+                {/* Questions & Answers */}
                 {isSectionOpen && (
                   <div className="space-y-6 pl-4 border-l-2 border-blue-200">
                     {section.faqs.map((faq, faqIndex) => (
@@ -170,7 +167,7 @@ export default function FAQ() {
 
         {/* CTA */}
         <div className="mt-16 text-center">
-          <p className="text-gray-600 mb-4">Have a different question/suggestions?</p>
+          <p className="text-gray-600 mb-4">Have a different question?</p>
           <Link
             href="/contact"
             className="text-blue-600 hover:text-blue-700 font-semibold inline-flex items-center gap-2"

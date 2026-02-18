@@ -40,7 +40,7 @@ export default function StoryPage() {
           {/* Founder Attribution */}
           <div className="pt-12 mt-12 border-t border-gray-200">
             <p className="font-semibold text-gray-900 text-lg">Founder, Campus Arena</p>
-            <p className="text-gray-600 italic text-base">Once a confused freshman. Now helping the next generation.</p>
+            <p className="text-gray-600 italic text-base">Now a graduate but once a student who needed this.</p>
           </div>
         </div>
 

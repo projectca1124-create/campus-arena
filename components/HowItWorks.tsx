@@ -13,15 +13,17 @@ export default function HowItWorks() {
       title: "Verify your campus",
       description: "Sign up with your college email and join your verified campus community instantly.",
       color: "bg-blue-100 hover:bg-blue-200",
-      iconColor: "text-blue-600"
+      iconColor: "text-blue-600",
+      dotColor: "bg-blue-500"
     },
     {
       id: 2,
       icon: Users,
       title: "Join your class",
-      description: "Connect with incoming freshmen in your major, dorm, or interest groups.",
+      description: "Find your people in your major, dorm, or interests before orientation.",
       color: "bg-purple-100 hover:bg-purple-200",
-      iconColor: "text-purple-600"
+      iconColor: "text-purple-600",
+      dotColor: "bg-purple-500"
     },
     {
       id: 3,
@@ -29,7 +31,8 @@ export default function HowItWorks() {
       title: "Meet classmates",
       description: "Browse profiles and send connection requests to build your network before arrival.",
       color: "bg-orange-100 hover:bg-orange-200",
-      iconColor: "text-orange-600"
+      iconColor: "text-orange-600",
+      dotColor: "bg-orange-500"
     },
     {
       id: 4,
@@ -37,59 +40,76 @@ export default function HowItWorks() {
       title: "Ask seniors",
       description: "Get real advice from verified upperclassmen about classes, housing, and campus life.",
       color: "bg-green-100 hover:bg-green-200",
-      iconColor: "text-green-600"
+      iconColor: "text-green-600",
+      dotColor: "bg-green-500"
     }
   ]
 
   return (
-    <section id="how-it-works" className="py-16 px-6 bg-white">
-      <div className="max-w-7xl mx-auto">
+    <section id="how-it-works" className="min-h-screen flex items-center py-16 px-6 bg-white">
+      <div className="w-full max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-12">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3">
+          <h2 className="text-4xl font-bold text-gray-900 mb-2">
             How it works
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="text-gray-600">
             Get started in minutes. No complicated setup required.
           </p>
         </div>
 
-        {/* 4 Boxes in One Row */}
-        <div className="grid grid-cols-4 gap-5">
-          {steps.map((step, index) => {
-            const Icon = step.icon
-            const isHovered = hoveredStep === index
+        {/* Vertical Timeline */}
+        <div className="relative max-w-3xl mx-auto">
+          {/* Center Line */}
+          <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 via-purple-500 to-green-500 transform -translate-x-1/2"></div>
 
-            return (
-              <div
-                key={step.id}
-                onMouseEnter={() => setHoveredStep(index)}
-                onMouseLeave={() => setHoveredStep(null)}
-                className={`rounded-2xl p-6 transition-all duration-300 cursor-pointer ${step.color} ${
-                  isHovered ? 'shadow-lg scale-105' : 'shadow-md'
-                }`}
-              >
-                {/* Icon at Top */}
-                <div className={`mb-4 transition-transform duration-300 ${isHovered ? 'scale-110' : 'scale-100'}`}>
-                  <Icon className={`w-7 h-7 ${step.iconColor}`} />
+          {/* Steps */}
+          <div className="space-y-6">
+            {steps.map((step, index) => {
+              const Icon = step.icon
+              const isLeft = index % 2 === 0
+
+              return (
+                <div key={step.id} className="relative">
+                  <div className={`flex gap-6 items-start ${isLeft ? 'flex-row' : 'flex-row-reverse'}`}>
+                    {/* Content Box */}
+                    <div 
+                      className="flex-1"
+                      onMouseEnter={() => setHoveredStep(index)}
+                      onMouseLeave={() => setHoveredStep(null)}
+                    >
+                      <div className={`rounded-xl p-4 ${step.color} transition-all duration-300 cursor-pointer ${hoveredStep === index ? 'shadow-md scale-105' : 'shadow-sm'}`}>
+                        <div className="flex gap-3">
+                          <div className={`flex-shrink-0 w-7 h-7 rounded-lg bg-white flex items-center justify-center`}>
+                            <Icon className={`w-4 h-4 ${step.iconColor}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-sm font-bold text-gray-900">
+                              {step.title}
+                            </h3>
+                            <p className="text-xs text-gray-700 mt-1 leading-relaxed">
+                              {step.description}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Center Dot */}
+                    <div className="flex-shrink-0 relative z-10">
+                      <div className={`w-8 h-8 rounded-full ${step.dotColor} flex items-center justify-center text-white font-bold text-xs shadow-lg border-4 border-white`}>
+                        {step.id}
+                      </div>
+                    </div>
+
+                    {/* Empty Space */}
+                    <div className="flex-1"></div>
+                  </div>
                 </div>
-
-                {/* Title */}
-                <h3 className="text-base font-bold text-gray-900 mb-2">
-                  {step.title}
-                </h3>
-
-                {/* Description */}
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {step.description}
-                </p>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
-
-        {/* CTA */}
-        
       </div>
     </section>
   )
