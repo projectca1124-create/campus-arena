@@ -90,9 +90,9 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <a href="#careers" className="hover:text-white transition-colors">
+                <Link href="/careers" className="hover:text-white transition-colors">
                   Careers
-                </a>
+                </Link>
               </li>
               <li>
                 <Link href="/contact" className="hover:text-white transition-colors">
@@ -117,15 +117,12 @@ export default function Footer() {
 
             {/* Legal Links */}
             <div className="flex gap-6 text-sm">
-              <a href="#privacy" className="hover:text-white transition-colors">
+              <Link href="/privacy" className="hover:text-white transition-colors">
                 Privacy Policy
-              </a>
-              <a href="#terms" className="hover:text-white transition-colors">
+              </Link>
+              <Link href="/terms" className="hover:text-white transition-colors">
                 Terms of Service
-              </a>
-              <a href="#cookies" className="hover:text-white transition-colors">
-                Cookie Policy
-              </a>
+              </Link>
             </div>
           </div>
         </div>

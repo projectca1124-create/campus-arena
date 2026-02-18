@@ -40,13 +40,13 @@ export default function Features() {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Everything You Need to
+            Meet Classmates Before Day 1. 
             <span className="block bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-purple-600">
-              Connect Before Day 1
+              Build Your Network All Four Years.
             </span>
           </h2>
           <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto">
-            Campus Arena gives you the tools to meet classmates, get insider guidance, and feel ready before you step on campus.
+            Campus Arena connects you with classmates, gets you insider guidance, and helps you feel ready before you step on campus.
 
           </p>
         </div>
