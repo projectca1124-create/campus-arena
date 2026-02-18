@@ -75,7 +75,7 @@ const jobPostings: JobPosting[] = [
 ]
 
 export default function CareersPage() {
-  const [expandedJob, setExpandedJob] = useState<string | null>(jobPostings[0].id)
+  const [expandedJob, setExpandedJob] = useState<string | null>(null)
 
   return (
     <div className="min-h-screen bg-white">
