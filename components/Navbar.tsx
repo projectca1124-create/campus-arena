@@ -64,21 +64,21 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center space-x-2">
             {navLinks.map((link) => (
               <div key={link.name}>
                 {link.href.startsWith('#') ? (
                   <a
                     href={link.href}
                     onClick={(e) => handleSmoothScroll(e, link.href)}
-                    className="text-gray-600 hover:text-gray-900 transition-colors duration-200 font-medium cursor-pointer"
+                    className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-blue-50 rounded-lg transition-colors duration-200 font-medium cursor-pointer"
                   >
                     {link.name}
                   </a>
                 ) : (
                   <Link
                     href={link.href}
-                    className="text-gray-600 hover:text-gray-900 transition-colors duration-200 font-medium"
+                    className="px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-blue-50 rounded-lg transition-colors duration-200 font-medium"
                   >
                     {link.name}
                   </Link>
@@ -100,7 +100,7 @@ export default function Navbar() {
           {/* Mobile Menu Button */}
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-blue-50 transition-colors"
             aria-label="Toggle menu"
           >
             {isMobileMenuOpen ? (
@@ -122,7 +122,7 @@ export default function Navbar() {
                   <a
                     href={link.href}
                     onClick={(e) => handleSmoothScroll(e, link.href)}
-                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors font-medium cursor-pointer"
+                    className="block px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-blue-50 rounded-lg transition-colors font-medium cursor-pointer"
                   >
                     {link.name}
                   </a>
@@ -130,7 +130,7 @@ export default function Navbar() {
                   <Link
                     href={link.href}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className="block px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors font-medium"
+                    className="block px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-blue-50 rounded-lg transition-colors font-medium"
                   >
                     {link.name}
                   </Link>
