@@ -42,7 +42,7 @@ export const userContactConfirmationEmail = (name: string) => ({
           </div>
           
           <div class="footer">
-            <p>© 2024 Campus Arena. All rights reserved.</p>
+            <p>© 2026 Campus Arena. All rights reserved.</p>
             <p>You're receiving this because you submitted a contact form on our website.</p>
           </div>
         </div>
@@ -94,7 +94,7 @@ export const adminContactNotificationEmail = (name: string, email: string, messa
           </div>
           
           <div class="footer">
-            <p>© 2024 Campus Arena.</p>
+            <p>© 2026 Campus Arena.</p>
             <p>This is an automated notification from Campus Arena contact form.</p>
           </div>
         </div>

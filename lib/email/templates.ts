@@ -47,7 +47,7 @@ export const userWaitlistEmail = (name: string) => ({
           </div>
           
           <div class="footer">
-            <p>© 2024 Campus Arena. All rights reserved.</p>
+            <p>© 2026 Campus Arena. All rights reserved.</p>
             <p>You're receiving this because you signed up for our waitlist.</p>
             <p>Questions? Reply to this email anytime.</p>
           </div>
@@ -94,7 +94,7 @@ export const adminWaitlistEmail = (name: string, email: string) => ({
           </div>
           
           <div class="footer">
-            <p>© 2024 Campus Arena.</p>
+            <p>© 2026 Campus Arena.</p>
             <p>This is an automated notification from Campus Arena admin system.</p>
           </div>
         </div>
