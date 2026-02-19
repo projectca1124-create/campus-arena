@@ -129,7 +129,7 @@ export default function Footer() {
                 <img src="/x-logo.png" alt="X" className="w-5 h-5" />
               </a>
               <a
-                href="https://www.linkedin.com/in/project-ca-78216a3a5?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3Bxlf72qohSU6WjTCnwv25KQ%3D%3D"
+                href="http://www.linkedin.com/in/campusarena"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-10 h-10 bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center justify-center transition-colors"
