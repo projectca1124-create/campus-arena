@@ -201,7 +201,7 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             {/* Copyright */}
             <p className="text-gray-500 text-sm">
-              © 2026 Campus Arena. All rights reserved.
+              © 2024 Campus Arena. All rights reserved.
             </p>
 
             {/* Legal Links */}
