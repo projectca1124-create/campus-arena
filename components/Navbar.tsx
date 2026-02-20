@@ -22,7 +22,6 @@ export default function Navbar() {
     { name: 'Features', href: '#features' },
     { name: 'How It Works', href: '#how-it-works' },
     { name: 'FAQ', href: '#faq' },
-    { name: 'Careers', href: '/careers' },
     { name: 'Contact', href: '#contact' },
   ]
 
@@ -87,13 +86,19 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Desktop CTA Buttons */}
-          <div className="hidden md:flex items-center space-x-4">
+          {/* Desktop CTA Buttons - Login & Sign Up (WITH TAB PARAMS) */}
+          <div className="hidden md:flex items-center space-x-3">
             <Link
-              href="/waitlist"
+              href="/auth?tab=login"
+              className="px-5 py-2.5 text-gray-600 hover:text-gray-900 font-medium transition-colors duration-200"
+            >
+              Log in
+            </Link>
+            <Link
+              href="/auth?tab=signup"
               className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
-              Join the Waitlist
+              Sign Up
             </Link>
           </div>
 
@@ -137,13 +142,20 @@ export default function Navbar() {
                 )}
               </div>
             ))}
-            <div className="pt-3 space-y-2">
+            <div className="pt-3 space-y-2 border-t border-gray-100">
               <Link
-                href="/waitlist"
+                href="/auth?tab=login"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="block px-4 py-3 text-center text-gray-600 hover:text-gray-900 font-medium transition-colors"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/auth?tab=signup"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="block px-4 py-3 text-center bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:shadow-lg transition-all"
               >
-                Join the Waitlist
+                Sign Up
               </Link>
             </div>
           </div>

@@ -1,9 +1,7 @@
 'use client'
 
-
 import Link from 'next/link'
-import { ArrowRight, Users, MessageCircle, Calendar } from 'lucide-react'
-
+import { Users, MessageCircle, Calendar } from 'lucide-react'
 
 export default function Hero() {
   return (
@@ -19,7 +17,6 @@ export default function Hero() {
           }
         }
 
-
         @keyframes arrowZoom {
           0%, 100% {
             transform: scale(1);
@@ -29,17 +26,14 @@ export default function Hero() {
           }
         }
 
-
         .zoom-button {
           animation: zoomInOut 1.5s ease-in-out infinite;
         }
-
 
         .zoom-arrow {
           animation: arrowZoom 1.5s ease-in-out infinite;
         }
       `}</style>
-
 
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
@@ -47,7 +41,6 @@ export default function Hero() {
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-400/20 rounded-full blur-3xl animate-pulse delay-2000"></div>
       </div>
-
 
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32">
@@ -63,26 +56,12 @@ export default function Hero() {
             Before Day 1.
           </h1>
 
-
           {/* Subheadline */}
           <div className="mb-12 max-w-3xl mx-auto">
             <p className="text-lg sm:text-xl md:text-2xl text-gray-600 mb-4 leading-relaxed font-semibold">
               College is overwhelming. Campus Arena makes it easier — before you even arrive.
             </p>
           </div>
-
-
-          {/* CTA Button with Zoom In-Out Animation */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <Link
-              href="/waitlist"
-              className="zoom-button group w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-2xl transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <span>Join the Waitlist</span>
-              <ArrowRight className="zoom-arrow h-5 w-5" />
-            </Link>
-          </div>
-
 
           {/* Value Props */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16">
@@ -99,7 +78,6 @@ export default function Hero() {
               </p>
             </div>
 
-
             {/* Pillar 2: Ask Seniors */}
             <div className="flex flex-col items-center">
               <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mb-4 shadow-lg">
@@ -112,7 +90,6 @@ export default function Hero() {
                 Ask anything. Get responses from students who've already taken your classes, lived in your dorm, chosen your major.
               </p>
             </div>
-
 
             {/* Pillar 3: Connect Early */}
             <div className="flex flex-col items-center">
@@ -129,7 +106,6 @@ export default function Hero() {
           </div>
         </div>
       </div>
-
 
       {/* Scroll indicator */}
       <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">

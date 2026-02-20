@@ -1,37 +1,91 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+// prisma/schema.prisma
 
 generator client {
   provider = "prisma-client-js"
 }
 
-model Waitlist {
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model - For storing user accounts (NEW - YOU NEED THIS!)
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  
+  // Profile Information
+  firstName     String?
+  lastName      String?
+  major         String?
+  semester      String?
+  year          String?
+  funFact       String?
+  profileImage  String?
+  
+  // Timestamps
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Indexes for faster queries
+  @@index([email])
+}
+
+// OTP Token Model - For OTP verification during signup (EXISTING)
+model OTPToken {
   id        String   @id @default(cuid())
-  name      String   @db.VarChar(255)
-  email     String   @unique @db.VarChar(255)
+  email     String   @unique
+  code      String
+  expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([email])
-  @@index([createdAt])
 }
 
+// Password Reset Token Model - For password reset via email (EXISTING)
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([email])
+  @@index([token])
+}
+
+// Admin Model (EXISTING)
 model Admin {
-  id    String @id @default(cuid())
-  email String @unique @db.VarChar(255)
-  name  String @db.VarChar(255)
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([email])
 }
 
+// ContactMessage Model (EXISTING - OPTIONAL SUBJECT)
 model ContactMessage {
   id        String   @id @default(cuid())
   name      String
   email     String
+  subject   String?
   message   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
 
+// Waitlist Model (EXISTING)
+model Waitlist {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
   @@index([email])
-  @@index([createdAt])
 }
