@@ -1,10 +1,11 @@
 // app/api/auth/forgot-password/route.ts
 
-import { prisma } from '@/lib/prisma'
+import { PrismaClient } from '@prisma/client'
 import { Resend } from 'resend'
 import { getResetPasswordEmailTemplate } from '@/lib/email/reset-password'
 import crypto from 'crypto'
 
+const prisma = new PrismaClient()
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: Request) {
@@ -12,6 +13,8 @@ export async function POST(request: Request) {
     const { email } = await request.json()
     
     const trimmedEmail = email.trim().toLowerCase()
+
+    console.log('📧 Forgot password request for:', trimmedEmail)
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.edu$/
@@ -27,10 +30,12 @@ export async function POST(request: Request) {
       where: { email: trimmedEmail },
     })
 
+    console.log('👤 User found:', user ? 'YES' : 'NO')
+
     // IMPORTANT: Always return success message (don't reveal if account exists)
     // But only send email if account exists
     if (!user) {
-      // Account doesn't exist - return same success response without sending email
+      console.log('⚠️ User does not exist, not sending email')
       return Response.json({
         success: true,
         message: 'If an account exists with this email, you will receive a reset link.',
@@ -41,13 +46,16 @@ export async function POST(request: Request) {
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
 
+    console.log('🔑 Generated token:', token)
+    console.log('⏱️ Expires at:', expiresAt.toISOString())
+
     // Delete old tokens for this email
     await prisma.passwordResetToken.deleteMany({
       where: { email: trimmedEmail },
     })
 
     // Create new reset token
-    await prisma.passwordResetToken.create({
+    const createdToken = await prisma.passwordResetToken.create({
       data: {
         email: trimmedEmail,
         token,
@@ -55,13 +63,17 @@ export async function POST(request: Request) {
       },
     })
 
+    console.log('✅ Token saved to database:', createdToken)
+
     // Create reset link
     const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password/${token}`
+
+    console.log('🔗 Reset link:', resetLink)
 
     // Send email with reset link
     const emailTemplate = getResetPasswordEmailTemplate(trimmedEmail, resetLink)
     
-    await resend.emails.send({
+    const emailResponse = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'noreply@campusarena.co',
       to: trimmedEmail,
       subject: emailTemplate.subject,
@@ -69,13 +81,14 @@ export async function POST(request: Request) {
       text: emailTemplate.text,
     })
 
-    // Return same success message (don't reveal if account exists)
+    console.log('📨 Email sent:', emailResponse)
+
     return Response.json({
       success: true,
       message: 'If an account exists with this email, you will receive a reset link.',
     })
   } catch (error) {
-    console.error('Forgot password error:', error)
+    console.error('❌ Forgot password error:', error)
     return Response.json(
       { error: 'Failed to process reset request' },
       { status: 500 }

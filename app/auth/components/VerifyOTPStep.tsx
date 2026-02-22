@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { Mail, ArrowLeft } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { ShieldAlert, ArrowLeft } from 'lucide-react'
 
 interface VerifyOTPStepProps {
   email: string
@@ -14,42 +14,71 @@ export default function VerifyOTPStep({
   onSuccess,
   onChangeEmail,
 }: VerifyOTPStepProps) {
-  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', ''])
+  const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  // Handle input change
+  // Handle individual box input
   const handleInputChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return // Only numbers
+    // Only allow single digit
+    if (value && !/^\d$/.test(value)) return
 
     const newOtp = [...otp]
-    newOtp[index] = value.slice(-1) // Only last character
+    newOtp[index] = value
 
     setOtp(newOtp)
     setError('')
 
-    // Auto-focus next input
+    // Move to next box if digit entered
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus()
     }
   }
 
   // Handle backspace
-  const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus()
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Handle paste - distribute digits across boxes
+  const handlePaste = (index: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const pastedText = e.clipboardData.getData('text')
+    const digits = pastedText.replace(/\D/g, '').split('') // Extract only digits
+
+    if (digits.length === 0) return
+
+    const newOtp = [...otp]
+    let currentIndex = index
+
+    // Fill boxes starting from current index
+    for (let i = 0; i < digits.length && currentIndex < 6; i++) {
+      newOtp[currentIndex] = digits[i]
+      currentIndex++
+    }
+
+    setOtp(newOtp)
+    setError('')
+
+    // Focus the last filled box or next empty box
+    const nextIndex = Math.min(currentIndex - 1, 5)
+    setTimeout(() => {
+      inputRefs.current[nextIndex]?.focus()
+    }, 0)
+  }
+
+  // Handle OTP verification
+  const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
     const otpCode = otp.join('')
 
-    if (otpCode.length !== 6) {
-      setError('Please enter all 6 digits')
+    if (otpCode.length < 6) {
+      setError('Please enter a valid 6-digit OTP')
       return
     }
 
@@ -63,20 +92,54 @@ export default function VerifyOTPStep({
         },
         body: JSON.stringify({
           email,
-          otp: otpCode,
+          code: otpCode,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'OTP verification failed')
+        throw new Error(data.error || 'Failed to verify OTP')
       }
 
       // OTP verified successfully
       onSuccess()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Verification failed'
+      const message = err instanceof Error ? err.message : 'Something went wrong'
+      setError(message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Resend OTP
+  const handleResendOTP = async () => {
+    setError('')
+    setIsLoading(true)
+
+    try {
+      const response = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          authType: 'signup',
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to resend OTP')
+      }
+
+      // Reset OTP
+      setOtp(['', '', '', '', '', ''])
+      inputRefs.current[0]?.focus()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to resend OTP'
       setError(message)
     } finally {
       setIsLoading(false)
@@ -87,38 +150,48 @@ export default function VerifyOTPStep({
     <div className="bg-white rounded-2xl p-8 shadow-lg">
       {/* Icon */}
       <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-        <Mail className="w-8 h-8 text-blue-600" />
+        <ShieldAlert className="w-8 h-8 text-blue-600" />
       </div>
 
       {/* Title */}
       <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
         Verify your email
       </h2>
-      <p className="text-gray-600 text-center mb-2">
-        Enter the 6-digit code sent to
+      <p className="text-gray-600 text-center mb-8">
+        We sent a verification code to <br />
+        <span className="font-semibold text-gray-900">{email}</span>
       </p>
-      <p className="text-gray-900 font-semibold text-center mb-8">{email}</p>
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* OTP Input Boxes */}
-        <div className="flex gap-2 justify-center">
-          {otp.map((digit, index) => (
-            <input
-              key={index}
-              ref={(el) => {
-                inputRefs.current[index] = el
-              }}
-              type="text"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleInputChange(index, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(index, e)}
-              className="w-12 h-12 border-2 border-gray-300 rounded-lg text-center text-lg font-semibold focus:border-blue-600 focus:outline-none transition-colors"
-              disabled={isLoading}
-              inputMode="numeric"
-            />
-          ))}
+      <form onSubmit={handleVerifyOTP} className="space-y-6">
+        {/* OTP Boxes */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-900 mb-4">
+            Verification Code
+          </label>
+          <div className="flex justify-center gap-3">
+            {otp.map((digit, index) => (
+              <input
+                key={index}
+                ref={(el) => {
+                  inputRefs.current[index] = el
+                }}
+                type="text"
+                value={digit}
+                onChange={(e) => handleInputChange(index, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(index, e)}
+                onPaste={(e) => handlePaste(index, e)}
+                maxLength={1}
+                placeholder="-"
+                className={`w-12 h-14 border-2 rounded-lg text-center text-2xl font-semibold focus:outline-none transition-all ${
+                  error
+                    ? 'border-red-500 focus:border-red-500 bg-red-50'
+                    : 'border-gray-300 focus:border-blue-500 bg-gray-50'
+                }`}
+                disabled={isLoading}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Error Message */}
@@ -141,21 +214,39 @@ export default function VerifyOTPStep({
           </div>
         )}
 
-        {/* Verify Button */}
+        {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading || otp.join('').length !== 6}
+          disabled={isLoading || otp.join('').length < 6}
           className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Verifying...' : 'Verify OTP'}
+          {isLoading ? 'Verifying...' : 'Verify Code'}
         </button>
       </form>
 
-      {/* Change Email Link */}
-      <div className="text-center mt-6">
+      {/* Divider */}
+      <div className="my-6 relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-200"></div>
+        </div>
+      </div>
+
+      {/* Resend & Change Email */}
+      <div className="space-y-3">
+        {/* Resend OTP Button */}
+        <button
+          onClick={handleResendOTP}
+          disabled={isLoading}
+          className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:border-blue-600 hover:text-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? 'Resending...' : 'Resend Code'}
+        </button>
+
+        {/* Change Email Link */}
         <button
           onClick={onChangeEmail}
-          className="text-gray-600 hover:text-gray-900 font-medium inline-flex items-center gap-2"
+          disabled={isLoading}
+          className="w-full py-2 text-gray-600 hover:text-gray-900 font-medium inline-flex items-center justify-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
           Change email

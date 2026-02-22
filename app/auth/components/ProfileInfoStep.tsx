@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { User, Camera } from 'lucide-react'
+import SignupSuccessPage from './SignupSuccessPage'
 
 interface ProfileInfoStepProps {
   email: string
@@ -39,6 +40,7 @@ export default function ProfileInfoStep({
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,7 +85,7 @@ export default function ProfileInfoStep({
         },
         body: JSON.stringify({
           email,
-          password, // IMPORTANT: Include password from Step 3
+          password,
           firstName,
           lastName,
           major,
@@ -100,22 +102,31 @@ export default function ProfileInfoStep({
         throw new Error(data.error || 'Failed to create account')
       }
 
-      // Success!
-      onSuccess({
-        firstName,
-        lastName,
-        major,
-        semester,
-        year,
-        funFact,
-        profileImage: profileImage || undefined,
-      })
+      // Show success screen instead of calling onSuccess immediately
+      setShowSuccessScreen(true)
+      
+      // Call onSuccess after success screen finishes
+      setTimeout(() => {
+        onSuccess({
+          firstName,
+          lastName,
+          major,
+          semester,
+          year,
+          funFact,
+          profileImage: profileImage || undefined,
+        })
+      }, 5000)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setError(message)
-    } finally {
       setIsLoading(false)
     }
+  }
+
+  // Show success screen
+  if (showSuccessScreen) {
+    return <SignupSuccessPage email={email} />
   }
 
   return (
@@ -182,7 +193,7 @@ export default function ProfileInfoStep({
                 setFirstName(e.target.value)
                 setError('')
               }}
-              placeholder="Shiva"
+              placeholder="John"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
               disabled={isLoading}
             />
@@ -198,7 +209,7 @@ export default function ProfileInfoStep({
                 setLastName(e.target.value)
                 setError('')
               }}
-              placeholder="Sondeep"
+              placeholder="Doe"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
               disabled={isLoading}
             />
@@ -279,7 +290,7 @@ export default function ProfileInfoStep({
               setFunFact(e.target.value)
               setError('')
             }}
-            placeholder="I love music"
+            placeholder="I love hiking"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500 resize-none"
             rows={3}
             disabled={isLoading}

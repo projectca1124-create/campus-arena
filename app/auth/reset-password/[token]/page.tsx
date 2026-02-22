@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Eye, EyeOff, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react'
 
 export default function ResetPasswordPage() {
   const params = useParams()
+  const router = useRouter()
   const token = params.token as string
 
   const [password, setPassword] = useState('')
@@ -19,7 +20,7 @@ export default function ResetPasswordPage() {
   const [tokenValid, setTokenValid] = useState(false)
   const [success, setSuccess] = useState(false)
 
-  // Validate token on mount
+  // Validate token when page loads
   useEffect(() => {
     const validateToken = async () => {
       try {
@@ -34,11 +35,12 @@ export default function ResetPasswordPage() {
         if (response.ok) {
           setTokenValid(true)
         } else {
-          setError('This reset link is invalid or has expired. Please request a new one.')
+          setError('This reset link is invalid or has expired.')
           setTokenValid(false)
         }
       } catch (err) {
-        setError('Failed to validate reset link. Please try again.')
+        console.error('Validation error:', err)
+        setError('Failed to validate reset link.')
         setTokenValid(false)
       } finally {
         setIsValidating(false)
@@ -48,11 +50,20 @@ export default function ResetPasswordPage() {
     validateToken()
   }, [token])
 
+  // Auto redirect to login after success
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        router.push('/auth?tab=login')
+      }, 3000) // Redirect after 3 seconds
+      return () => clearTimeout(timer)
+    }
+  }, [success, router])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    // Validation
     if (!password || !confirmPassword) {
       setError('Please fill in all fields')
       return
@@ -88,7 +99,6 @@ export default function ResetPasswordPage() {
         throw new Error(data.error || 'Failed to reset password')
       }
 
-      // Success!
       setSuccess(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
@@ -117,32 +127,37 @@ export default function ResetPasswordPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
+          <div className="text-center mb-12">
+            <Link href="/" className="inline-flex items-center space-x-2 mb-8">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-lg">CA</span>
+              </div>
+              <span className="text-xl font-bold text-gray-900">Campus Arena</span>
+            </Link>
+          </div>
+
           <div className="bg-white rounded-2xl p-8 shadow-lg text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertCircle className="w-8 h-8 text-red-600" />
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Link Expired</h2>
-            <p className="text-gray-600 mb-6">
-              This password reset link is invalid or has expired.
-            </p>
+            <p className="text-gray-600 mb-8">{error}</p>
 
             <Link
               href="/auth/forgot-password"
-              className="inline-block w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+              className="inline-block w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all mb-4"
             >
               Request New Reset Link
             </Link>
 
-            <div className="text-center mt-6">
-              <Link
-                href="/auth?tab=login"
-                className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to login
-              </Link>
-            </div>
+            <Link
+              href="/auth?tab=login"
+              className="inline-flex items-center justify-center gap-2 text-gray-600 hover:text-gray-900 font-medium w-full"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to login
+            </Link>
           </div>
         </div>
       </div>
@@ -170,14 +185,14 @@ export default function ResetPasswordPage() {
 
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Password Reset</h2>
             <p className="text-gray-600 mb-8">
-              Your password has been successfully reset. You can now log in with your new password.
+              Your password has been successfully reset. Redirecting to login in 3 seconds...
             </p>
 
             <Link
               href="/auth?tab=login"
               className="inline-block w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
             >
-              Go to Login
+              Go to Login Now
             </Link>
           </div>
         </div>
@@ -189,7 +204,6 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-12">
           <Link href="/" className="inline-flex items-center space-x-2 mb-8">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
@@ -199,17 +213,16 @@ export default function ResetPasswordPage() {
           </Link>
         </div>
 
-        {/* Form Card */}
         <div className="bg-white rounded-2xl p-8 shadow-lg">
           <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">
             Create New Password
           </h2>
           <p className="text-gray-600 text-center mb-8">
-            Enter your new password below
+            Enter your new password below.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Password Input */}
+            {/* New Password */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">
                 New Password
@@ -243,12 +256,10 @@ export default function ResetPasswordPage() {
                   )}
                 </button>
               </div>
-              <p className="mt-1 text-xs text-gray-500">
-                At least 8 characters
-              </p>
+              <p className="mt-1 text-xs text-gray-500">At least 8 characters</p>
             </div>
 
-            {/* Confirm Password Input */}
+            {/* Confirm Password */}
             <div>
               <label className="block text-sm font-semibold text-gray-900 mb-2">
                 Confirm Password
@@ -288,11 +299,7 @@ export default function ResetPasswordPage() {
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-600 flex items-center gap-2">
-                  <svg
-                    className="w-4 h-4"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
                       d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
@@ -314,7 +321,6 @@ export default function ResetPasswordPage() {
             </button>
           </form>
 
-          {/* Back to Login Link */}
           <div className="text-center mt-6">
             <Link
               href="/auth?tab=login"
@@ -323,6 +329,8 @@ export default function ResetPasswordPage() {
               <ArrowLeft className="w-4 h-4" />
               Back to login
             </Link>
+
+            
           </div>
         </div>
       </div>

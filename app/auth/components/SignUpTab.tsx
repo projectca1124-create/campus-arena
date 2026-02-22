@@ -57,7 +57,29 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
     setIsLoading(true)
 
     try {
-      // Send OTP request
+      // FIRST: Check if account already exists
+      console.log('🔍 Checking if account exists for:', trimmedEmail)
+      const checkResponse = await fetch('/api/auth/check-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: trimmedEmail }),
+      })
+
+      const checkData = await checkResponse.json()
+
+      // If account exists, show error
+      if (checkData.exists) {
+        console.log('❌ Account already exists')
+        setError('An account with this email already exists. Please log in instead.')
+        setIsLoading(false)
+        return
+      }
+
+      console.log('✅ Account does not exist, sending OTP...')
+
+      // SECOND: Send OTP if account doesn't exist
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: {
@@ -75,11 +97,14 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
         throw new Error(data.error || 'Failed to send OTP')
       }
 
+      console.log('📧 OTP sent successfully')
+
       // OTP sent successfully, move to step 2
       setSignUpData({ ...signUpData, email: trimmedEmail })
       updateStep(2)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
+      console.error('❌ Error:', message)
       setError(message)
     } finally {
       setIsLoading(false)
@@ -108,10 +133,9 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
   // Step 4: Profile Info - Account creation complete
   const handleProfileSuccess = (profileData: any) => {
     // All data collected, account created
-    // You can redirect to dashboard or show success screen
-    console.log('Account created:', { ...signUpData, ...profileData })
+    console.log('✅ Account created:', { ...signUpData, ...profileData })
     // Redirect to dashboard or home
-    window.location.href = '/dashboard'
+    window.location.href = '/home'
   }
 
   // Render Step 1: Email Entry
@@ -180,7 +204,7 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
             disabled={isLoading || !signUpData.email}
             className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Sending code...' : 'Generate OTP'}
+            {isLoading ? 'Checking email...' : 'Generate OTP'}
           </button>
         </form>
 
@@ -241,10 +265,11 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
   if (currentStep === 4) {
     return (
       <ProfileInfoStep
-  email={signUpData.email || ''}
-  password={signUpData.password || ''}  
-  onSuccess={handleProfileSuccess}
-/>
+        email={signUpData.email || ''}
+        password={signUpData.password || ''}
+        onSuccess={handleProfileSuccess}
+        onTabChange={onTabChange}
+      />
     )
   }
 
