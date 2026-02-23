@@ -51,10 +51,9 @@ export async function POST(request: Request) {
     }
 
     console.log('✅ Password verified!')
-
-    // Return user data (without password)
     console.log('🎉 Login successful!')
 
+    // Return user data (without password) — including profileImage
     return Response.json({
       success: true,
       message: 'Login successful',
@@ -67,6 +66,7 @@ export async function POST(request: Request) {
         major: user.major,
         semester: user.semester,
         year: user.year,
+        profileImage: user.profileImage,
       },
     })
   } catch (error) {

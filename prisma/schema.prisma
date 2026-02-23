@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,30 +7,78 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User Model - For storing user accounts (NEW - YOU NEED THIS!)
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  password      String
-  
-  // Profile Information
-  firstName     String?
-  lastName      String?
-  major         String?
-  semester      String?
-  year          String?
-  funFact       String?
-  profileImage  String?
-  
-  // Timestamps
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // Indexes for faster queries
+  id                                           String                @id @default(cuid())
+  email                                        String                @unique
+  password                                     String
+  firstName                                    String?
+  lastName                                     String?
+  major                                        String?
+  semester                                     String?
+  year                                         String?
+  funFact                                      String?
+  profileImage                                 String?
+  createdAt                                    DateTime              @default(now())
+  updatedAt                                    DateTime              @updatedAt
+  university                                   String?
+  ClubFundTransaction                          ClubFundTransaction[]
+  ClubMember                                   ClubMember[]
+  DirectMessage_DirectMessage_receiverIdToUser DirectMessage[]       @relation("DirectMessage_receiverIdToUser")
+  DirectMessage_DirectMessage_senderIdToUser   DirectMessage[]       @relation("DirectMessage_senderIdToUser")
+  EventAttendee                                EventAttendee[]
+  FoundItem                                    FoundItem[]
+  groups                                       GroupMember[]
+  LostItem                                     LostItem[]
+  messages                                     Message[]
+
   @@index([email])
+  @@index([university])
 }
 
-// OTP Token Model - For OTP verification during signup (EXISTING)
+model Group {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  university  String
+  type        String        @default("general")
+  isDefault   Boolean       @default(false)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  members     GroupMember[]
+  messages    Message[]
+
+  @@index([university])
+  @@index([isDefault])
+}
+
+model GroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  joinedAt DateTime @default(now())
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  groupId   String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([userId])
+}
+
 model OTPToken {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -40,52 +86,191 @@ model OTPToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@index([email])
 }
 
-// Password Reset Token Model - For password reset via email (EXISTING)
 model PasswordResetToken {
   id        String   @id @default(cuid())
   email     String
   token     String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
-  
+
   @@index([email])
   @@index([token])
 }
 
-// Admin Model (EXISTING)
 model Admin {
   id        String   @id @default(cuid())
   email     String   @unique
-  password  String
   name      String?
   createdAt DateTime @default(now())
+  password  String
   updatedAt DateTime @updatedAt
-  
+
   @@index([email])
 }
 
-// ContactMessage Model (EXISTING - OPTIONAL SUBJECT)
 model ContactMessage {
   id        String   @id @default(cuid())
   name      String
   email     String
-  subject   String?
   message   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  subject   String?
 }
 
-// Waitlist Model (EXISTING)
 model Waitlist {
   id        String   @id @default(cuid())
-  email     String   @unique
   name      String?
+  email     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@index([email])
+}
+
+model Club {
+  id           String         @id
+  name         String
+  description  String?
+  icon         String?
+  banner       String?
+  university   String
+  category     String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  ClubFundPool ClubFundPool[]
+  ClubMember   ClubMember[]
+  Event        Event[]
+
+  @@index([university])
+}
+
+model ClubFundPool {
+  id                  String                @id
+  clubId              String
+  name                String
+  goal                Float
+  current             Float                 @default(0)
+  description         String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  Club                Club                  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  ClubFundTransaction ClubFundTransaction[]
+
+  @@index([clubId])
+}
+
+model ClubFundTransaction {
+  id           String       @id
+  poolId       String
+  userId       String
+  amount       Float
+  type         String
+  description  String?
+  createdAt    DateTime     @default(now())
+  ClubFundPool ClubFundPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  User         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([poolId])
+  @@index([userId])
+}
+
+model ClubMember {
+  id       String   @id
+  clubId   String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+  Club     Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  User     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, userId])
+  @@index([clubId])
+  @@index([userId])
+}
+
+model DirectMessage {
+  id                                  String   @id
+  content                             String
+  senderId                            String
+  receiverId                          String
+  isRead                              Boolean  @default(false)
+  createdAt                           DateTime @default(now())
+  User_DirectMessage_receiverIdToUser User     @relation("DirectMessage_receiverIdToUser", fields: [receiverId], references: [id], onDelete: Cascade)
+  User_DirectMessage_senderIdToUser   User     @relation("DirectMessage_senderIdToUser", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([receiverId])
+  @@index([senderId])
+}
+
+model Event {
+  id            String          @id
+  title         String
+  description   String?
+  image         String?
+  date          DateTime
+  time          String
+  location      String?
+  university    String
+  clubId        String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  Club          Club?           @relation(fields: [clubId], references: [id])
+  EventAttendee EventAttendee[]
+
+  @@index([clubId])
+  @@index([university])
+}
+
+model EventAttendee {
+  id       String   @id
+  eventId  String
+  userId   String
+  joinedAt DateTime @default(now())
+  Event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  User     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
+}
+
+model FoundItem {
+  id          String   @id
+  title       String
+  description String
+  image       String?
+  location    String
+  foundDate   DateTime
+  university  String
+  userId      String
+  isReturned  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isReturned])
+  @@index([university])
+  @@index([userId])
+}
+
+model LostItem {
+  id          String   @id
+  title       String
+  description String
+  image       String?
+  location    String
+  lostDate    DateTime
+  university  String
+  userId      String
+  isFound     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isFound])
+  @@index([university])
+  @@index([userId])
 }

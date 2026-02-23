@@ -14,28 +14,27 @@ function extractUniversity(email: string): string {
 }
 
 // Helper function to create default groups for university
-async function createDefaultGroupsForUniversity(university: string, userId: string) {
+async function createDefaultGroupsForUniversity(
+  university: string,
+  userId: string,
+  major: string,
+  semester: string,
+  year: string
+) {
   try {
     console.log(`📚 Creating default groups for ${university}...`)
 
-    // Check if default groups already exist for this university
-    const existingGroups = await prisma.group.findMany({
+    // ── 1. University Arena Group (shared across all users at this university) ──
+    let arenaGroup = await prisma.group.findFirst({
       where: {
         university: university,
         isDefault: true,
+        type: 'general',
       },
     })
 
-    console.log(`Found ${existingGroups.length} existing default groups for ${university}`)
-
-    let arenaGroup = null
-    let classGroup = null
-
-    // If groups don't exist, create them
-    if (existingGroups.length === 0) {
-      console.log('Creating new default groups...')
-      
-      // Create main university arena group
+    if (!arenaGroup) {
+      console.log('Creating new Arena group...')
       arenaGroup = await prisma.group.create({
         data: {
           name: `${university} Arena`,
@@ -47,67 +46,73 @@ async function createDefaultGroupsForUniversity(university: string, userId: stri
         },
       })
       console.log(`✅ Created ${university} Arena group`)
+    }
 
-      // Create a sample class/major group
-      classGroup = await prisma.group.create({
+    // Add user to arena group if not already a member
+    const existingArenaMember = await prisma.groupMember.findUnique({
+      where: {
+        groupId_userId: {
+          groupId: arenaGroup.id,
+          userId: userId,
+        },
+      },
+    })
+
+    if (!existingArenaMember) {
+      await prisma.groupMember.create({
         data: {
-          name: `Data Science Fall 2023`,
-          description: `For students in Data Science courses`,
+          groupId: arenaGroup.id,
+          userId: userId,
+        },
+      })
+      console.log(`✅ Added user to ${arenaGroup.name}`)
+    }
+
+    // ── 2. Major + Semester + Year Group (dynamic based on user's profile) ──
+    const majorGroupName = `${major} ${semester} ${year}`
+    const majorGroupDescription = `For students in ${major} courses`
+
+    let majorGroup = await prisma.group.findFirst({
+      where: {
+        name: majorGroupName,
+        university: university,
+        isDefault: true,
+      },
+    })
+
+    if (!majorGroup) {
+      console.log(`Creating new major group: ${majorGroupName}...`)
+      majorGroup = await prisma.group.create({
+        data: {
+          name: majorGroupName,
+          description: majorGroupDescription,
           university: university,
           type: 'class',
           isDefault: true,
-          icon: '📊',
+          icon: '📚',
         },
       })
-      console.log(`✅ Created Data Science Fall 2023 group`)
-    } else {
-      // Use existing groups
-      arenaGroup = existingGroups.find(g => g.name.includes('Arena'))
-      classGroup = existingGroups.find(g => g.name.includes('Data Science'))
+      console.log(`✅ Created ${majorGroupName} group`)
     }
 
-    // Add user to arena group
-    if (arenaGroup) {
-      const existingMember = await prisma.groupMember.findUnique({
-        where: {
-          groupId_userId: {
-            groupId: arenaGroup.id,
-            userId: userId,
-          },
+    // Add user to major group if not already a member
+    const existingMajorMember = await prisma.groupMember.findUnique({
+      where: {
+        groupId_userId: {
+          groupId: majorGroup.id,
+          userId: userId,
+        },
+      },
+    })
+
+    if (!existingMajorMember) {
+      await prisma.groupMember.create({
+        data: {
+          groupId: majorGroup.id,
+          userId: userId,
         },
       })
-
-      if (!existingMember) {
-        await prisma.groupMember.create({
-          data: {
-            groupId: arenaGroup.id,
-            userId: userId,
-          },
-        })
-        console.log(`✅ Added user to ${arenaGroup.name}`)
-      }
-    }
-
-    // Add user to class group
-    if (classGroup) {
-      const existingMember = await prisma.groupMember.findUnique({
-        where: {
-          groupId_userId: {
-            groupId: classGroup.id,
-            userId: userId,
-          },
-        },
-      })
-
-      if (!existingMember) {
-        await prisma.groupMember.create({
-          data: {
-            groupId: classGroup.id,
-            userId: userId,
-          },
-        })
-        console.log(`✅ Added user to ${classGroup.name}`)
-      }
+      console.log(`✅ Added user to ${majorGroupName}`)
     }
   } catch (error) {
     console.error('❌ Error creating default groups:', error)
@@ -155,7 +160,7 @@ export async function POST(request: Request) {
     console.log('🔐 Hashing password...')
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Create user with university field
+    // Create user with all profile fields
     console.log('💾 Creating user in database...')
     const user = await prisma.user.create({
       data: {
@@ -168,14 +173,14 @@ export async function POST(request: Request) {
         year,
         funFact,
         profileImage,
-        university, // Save extracted university
+        university,
       },
     })
 
     console.log('✅ User created successfully:', user.id)
 
-    // Create default groups and add user to them
-    await createDefaultGroupsForUniversity(university, user.id)
+    // Create default groups using the user's actual major, semester, and year
+    await createDefaultGroupsForUniversity(university, user.id, major, semester, year)
 
     // Delete OTP token (one-time use)
     console.log('🗑️ Deleting OTP token...')
@@ -194,6 +199,10 @@ export async function POST(request: Request) {
         firstName: user.firstName,
         lastName: user.lastName,
         university: user.university,
+        major: user.major,
+        semester: user.semester,
+        year: user.year,
+        profileImage: user.profileImage,
       },
     })
   } catch (error) {
