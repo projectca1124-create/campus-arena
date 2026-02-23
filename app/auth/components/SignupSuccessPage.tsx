@@ -31,6 +31,7 @@ export default function SignupSuccessPage({ email, onComplete }: SignupSuccessPa
       if (onComplete) {
         onComplete()
       } else {
+        // Redirect to home page after signup success
         router.push('/home')
       }
     }, 5000)

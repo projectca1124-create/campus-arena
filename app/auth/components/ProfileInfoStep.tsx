@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { User, Camera } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import SignupSuccessPage from './SignupSuccessPage'
 
 interface ProfileInfoStepProps {
@@ -31,6 +32,7 @@ export default function ProfileInfoStep({
   onSuccess,
   onTabChange,
 }: ProfileInfoStepProps) {
+  const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [major, setMajor] = useState('')
@@ -78,6 +80,7 @@ export default function ProfileInfoStep({
 
     try {
       // Submit profile data with password
+      console.log('📝 Completing signup...')
       const response = await fetch('/api/auth/complete-signup', {
         method: 'POST',
         headers: {
@@ -102,23 +105,20 @@ export default function ProfileInfoStep({
         throw new Error(data.error || 'Failed to create account')
       }
 
-      // Show success screen instead of calling onSuccess immediately
+      console.log('✅ Signup complete! User created:', data.user.id)
+
+      // Store user in localStorage
+      localStorage.setItem('user', JSON.stringify(data.user))
+      console.log('💾 User stored in localStorage')
+
+      // Show success screen
       setShowSuccessScreen(true)
       
-      // Call onSuccess after success screen finishes
-      setTimeout(() => {
-        onSuccess({
-          firstName,
-          lastName,
-          major,
-          semester,
-          year,
-          funFact,
-          profileImage: profileImage || undefined,
-        })
-      }, 5000)
+      // Auto-redirect to home after 5 seconds
+      // The SignupSuccessPage will handle the redirect via useEffect
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
+      console.error('❌ Error:', message)
       setError(message)
       setIsLoading(false)
     }

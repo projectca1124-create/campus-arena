@@ -3,12 +3,14 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 interface LoginTabProps {
   onTabChange: (tab: 'signup' | 'login') => void
 }
 
 export default function LoginTab({ onTabChange }: LoginTabProps) {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -58,8 +60,9 @@ export default function LoginTab({ onTabChange }: LoginTabProps) {
         throw new Error(data.error || 'Login failed')
       }
 
-      // Success - redirect to dashboard or home
-      window.location.href = '/dashboard'
+      // Success - Store user in localStorage and redirect to home
+      localStorage.setItem('user', JSON.stringify(data.user))
+      router.push('/home')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setError(message)
