@@ -51,9 +51,9 @@ async function createDefaultGroupsForUniversity(
     // Add user to arena group if not already a member
     const existingArenaMember = await prisma.groupMember.findUnique({
       where: {
-        groupId_userId: {
-          groupId: arenaGroup.id,
+        userId_groupId: {
           userId: userId,
+          groupId: arenaGroup.id,
         },
       },
     })
@@ -98,9 +98,9 @@ async function createDefaultGroupsForUniversity(
     // Add user to major group if not already a member
     const existingMajorMember = await prisma.groupMember.findUnique({
       where: {
-        groupId_userId: {
-          groupId: majorGroup.id,
+        userId_groupId: {
           userId: userId,
+          groupId: majorGroup.id,
         },
       },
     })

@@ -1,5 +1,6 @@
 // app/api/dm/route.ts
 
+import { notifyDM } from '@/lib/notifications'
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -168,6 +169,9 @@ export async function POST(request: Request) {
         },
       },
     })
+
+    const senderUser = await prisma.user.findUnique({ where: { id: senderId }, select: { firstName: true, lastName: true } })
+notifyDM(receiverId, `${senderUser?.firstName} ${senderUser?.lastName}`).catch(() => {})
 
     return Response.json({ success: true, message })
   } catch (error) {

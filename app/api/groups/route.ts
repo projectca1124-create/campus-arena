@@ -10,16 +10,9 @@ export async function GET(request: Request) {
     const userId = searchParams.get('userId')
 
     if (!userId) {
-      console.log('❌ userId is missing')
-      return Response.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'userId is required' }, { status: 400 })
     }
 
-    console.log('📚 Fetching groups for user:', userId)
-
-    // Get all groups where user is a member
     const groupMembers = await prisma.groupMember.findMany({
       where: { userId },
       include: {
@@ -34,6 +27,10 @@ export async function GET(request: Request) {
                     firstName: true,
                     lastName: true,
                     university: true,
+                    major: true,
+                    semester: true,
+                    year: true,
+                    profileImage: true,
                   },
                 },
               },
@@ -45,6 +42,7 @@ export async function GET(request: Request) {
                     id: true,
                     firstName: true,
                     lastName: true,
+                    profileImage: true,
                   },
                 },
               },
@@ -56,9 +54,6 @@ export async function GET(request: Request) {
       },
     })
 
-    console.log(`✅ Found ${groupMembers.length} group memberships`)
-
-    // Extract groups and ensure proper structure
     const groups = groupMembers.map((gm) => ({
       id: gm.group.id,
       name: gm.group.name,
@@ -71,13 +66,7 @@ export async function GET(request: Request) {
       messages: gm.group.messages,
     }))
 
-    console.log(`✅ Returning ${groups.length} groups`)
-    console.log('Groups:', groups.map(g => ({ id: g.id, name: g.name })))
-
-    return Response.json({
-      success: true,
-      groups,
-    })
+    return Response.json({ success: true, groups })
   } catch (error) {
     console.error('❌ Get groups error:', error)
     return Response.json(

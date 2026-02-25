@@ -1,7 +1,7 @@
 // app/api/campus-talks/[id]/responses/route.ts
 
 import { PrismaClient } from '@prisma/client'
-
+import { notifyTalkResponse } from '@/lib/notifications'
 const prisma = new PrismaClient()
 
 // GET - list responses for a campus talk
@@ -93,6 +93,9 @@ export async function POST(
         },
       },
     })
+
+    const responderName = `${response.user.firstName} ${response.user.lastName}`
+    notifyTalkResponse(id, userId, responderName).catch(() => {})
 
     return Response.json({ success: true, response })
   } catch (error) {

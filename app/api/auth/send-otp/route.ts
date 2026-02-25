@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
+import dns from 'dns'
+import { promisify } from 'util'
+
+const resolveMx = promisify(dns.resolveMx)
 
 const prisma = new PrismaClient()
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -18,6 +22,7 @@ export async function POST(request: NextRequest) {
     console.log(`📧 OTP request for ${authType}:`, email)
 
     // Validate email format
+    // Validate email format
     const eduEmailRegex = /^[^\s@]+@[^\s@]+\.edu$/
     if (!eduEmailRegex.test(email)) {
       return NextResponse.json(
@@ -25,6 +30,33 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Validate email domain has MX records
+    const dns = await import('dns')
+    const { promisify } = await import('util')
+    const resolveMx = promisify(dns.resolveMx)
+    // Validate email domain has MX records
+    const domain = email.split('@')[1]
+    try {
+      console.log('🔍 Checking MX records for domain:', domain)
+      const mxRecords = await resolveMx(domain)
+      if (!mxRecords || mxRecords.length === 0) {
+        console.log('❌ No MX records found for:', domain)
+        return NextResponse.json(
+          { error: 'Please enter a valid email address' },
+          { status: 400 }
+        )
+      }
+      console.log('✅ MX records found:', mxRecords.length)
+    } catch {
+      console.log('❌ MX lookup failed for:', domain)
+      return NextResponse.json(
+        { error: 'Please enter a valid email address' },
+        { status: 400 }
+      )
+    }
+
+    // Generate OTP
 
     // Generate OTP
     const otp = generateOTP()

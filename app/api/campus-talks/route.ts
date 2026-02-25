@@ -58,20 +58,23 @@ export async function GET(request: Request) {
             profileImage: true,
           },
         },
-        responses: {
-          select: { id: true },
+       responses: {
+          select: { id: true, userId: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     })
 
     // Filter based on tab
+   // Filter based on tab
     let filteredTalks = talks
     if (tab === 'all') {
-      // All Discussions = only questions that have at least 1 response
       filteredTalks = talks.filter((t) => t.responses.length > 0)
     } else if (tab === 'unanswered') {
       filteredTalks = talks.filter((t) => t.responses.length === 0)
+    } else if (tab === 'answered') {
+      // Show only discussions where this user has given a response
+      filteredTalks = talks.filter((t) => t.responses.some((r: any) => r.userId === userId))
     }
     // 'my' tab shows all of user's questions regardless of responses
 
