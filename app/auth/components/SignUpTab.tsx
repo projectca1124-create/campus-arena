@@ -57,7 +57,7 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
     setIsLoading(true)
 
     try {
-      // FIRST: Check if account already exists
+      // FIRST:Check if
       console.log('🔍 Checking if account exists for:', trimmedEmail)
       const checkResponse = await fetch('/api/auth/check-email', {
         method: 'POST',
