@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Validate email format
     // Validate email format
-    const eduEmailRegex = /^[^\s@]+@[^\s@]+\.edu$/
+   const eduEmailRegex = /^[^\s@]+@([^\s@]+\.)*[^\s@]+\.edu$/
     if (!eduEmailRegex.test(email)) {
       return NextResponse.json(
         { error: 'Please use your university email (.edu)' },
