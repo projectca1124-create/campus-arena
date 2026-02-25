@@ -48,7 +48,7 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
     const trimmedEmail = email.trim().toLowerCase()
 
     // Validate email format
-    const eduEmailRegex = /^[^\s@]+@[^\s@]+\.edu$/
+    const eduEmailRegex = /^[^\s@]+@([^\s@]+\.)*[^\s@]+\.edu$/
     if (!eduEmailRegex.test(trimmedEmail)) {
       setError('Please use your university email (must end in .edu)')
       return
