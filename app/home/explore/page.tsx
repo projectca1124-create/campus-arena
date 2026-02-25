@@ -13,45 +13,27 @@ import {
   LogOut,
   Bell,
   Loader2,
-  ChevronDown,
 } from 'lucide-react'
+import NotificationBell from '@/components/NotificationBell';
 
 interface User {
-  id: string
-  email: string
-  firstName: string
-  lastName: string
-  university?: string
-  major?: string
-  semester?: string
-  year?: string
-  profileImage?: string
+  id: string; email: string; firstName: string; lastName: string
+  university?: string; major?: string; semester?: string; year?: string; profileImage?: string
 }
 
 interface Classmate {
-  id: string
-  firstName: string
-  lastName: string
-  major?: string
-  semester?: string
-  year?: string
-  funFact?: string
-  profileImage?: string
-  university?: string
+  id: string; firstName: string; lastName: string; major?: string; semester?: string
+  year?: string; funFact?: string; profileImage?: string; university?: string
 }
 
 function UserAvatar({ src, firstName, lastName, size = 60, className = '' }: {
   src?: string | null; firstName?: string; lastName?: string; size?: number; className?: string
 }) {
   const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`
-  if (src) {
-    return <img src={src} alt={`${firstName} ${lastName}`} className={`rounded-full object-cover flex-shrink-0 ${className}`} style={{ width: size, height: size }} />
-  }
+  if (src) return <img src={src} alt={`${firstName} ${lastName}`} className={`rounded-full object-cover flex-shrink-0 ${className}`} style={{ width: size, height: size }} />
   return (
     <div className={`rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold flex-shrink-0 ${className}`}
-      style={{ width: size, height: size, fontSize: size * 0.35 }}>
-      {initials}
-    </div>
+      style={{ width: size, height: size, fontSize: size * 0.35 }}>{initials}</div>
   )
 }
 
@@ -88,11 +70,8 @@ export default function ExploreClassmatesPage() {
         setAvailableMajors(data.filters?.majors || [])
         setAvailableYears(data.filters?.years || [])
       }
-    } catch (err) {
-      console.error('Error:', err)
-    } finally {
-      setIsLoading(false)
-    }
+    } catch (err) { console.error('Error:', err) }
+    finally { setIsLoading(false) }
   }
 
   useEffect(() => {
@@ -101,23 +80,14 @@ export default function ExploreClassmatesPage() {
     return () => clearTimeout(timeout)
   }, [searchQuery, majorFilter, yearFilter])
 
-  const handleConnect = (classmate: Classmate) => {
-    // Navigate to chat with this person's DM open
-    router.push('/home')
-  }
+  const handleConnect = (classmate: Classmate) => { router.push('/home') }
+  const handleLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
 
-  const handleLogout = () => {
-    localStorage.removeItem('user')
-    router.push('/auth')
-  }
-
-  // Derive class from semester
   const getClassLabel = (semester?: string, year?: string) => {
     if (!semester || !year) return ''
     return `Class of ${semester} ${year}`
   }
 
-  // Parse funFact as interests (comma or space separated)
   const getInterests = (funFact?: string) => {
     if (!funFact) return []
     return funFact.split(/[,;]/).map(s => s.trim()).filter(Boolean).slice(0, 3)
@@ -136,13 +106,13 @@ export default function ExploreClassmatesPage() {
           </div>
         </div>
         <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-0.5">
-          <NavItem icon={<LayoutList className="w-[18px] h-[18px]" />} label="CAMP" />
-          <NavItem icon={<Home className="w-[18px] h-[18px]" />} label="Dashboard" />
+          {/* <NavItem icon={<LayoutList className="w-[18px] h-[18px]" />} label="CAMP" /> */}
+          {/* <NavItem icon={<Home className="w-[18px] h-[18px]" />} label="Dashboard" /> */}
           <NavItem icon={<MessageSquare className="w-[18px] h-[18px]" />} label="Chat" onClick={() => router.push('/home')} />
-          <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks" />
-          <NavItem icon={<Calendar className="w-[18px] h-[18px]" />} label="Events" />
-          <NavItem icon={<Users className="w-[18px] h-[18px]" />} label="Clubs" />
-          <NavItem icon={<Search className="w-[18px] h-[18px]" />} label="Lost & Found" />
+          <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks" onClick={() => router.push('/home/campus-talks')} />
+          {/* <NavItem icon={<Calendar className="w-[18px] h-[18px]" />} label="Events" /> */}
+          {/* <NavItem icon={<Users className="w-[18px] h-[18px]" />} label="Clubs" /> */}
+          {/* <NavItem icon={<Search className="w-[18px] h-[18px]" />} label="Lost & Found" /> */}
         </nav>
         <div className="px-3 py-4 border-t border-gray-200">
           <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium">
@@ -158,24 +128,19 @@ export default function ExploreClassmatesPage() {
           <h1 className="text-[15px] font-semibold text-gray-900">Explore Classmates</h1>
           {user && (
             <div className="flex items-center gap-3">
-              <button className="relative p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-all">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-              </button>
-              <UserAvatar src={user.profileImage} firstName={user.firstName} lastName={user.lastName} size={36} className="border-2 border-gray-100" />
+              <NotificationBell userId={user?.id || ''} />
+              <button onClick={() => router.push('/home/profile')}><UserAvatar src={user.profileImage} firstName={user.firstName} lastName={user.lastName} size={36} className="border-2 border-gray-100 cursor-pointer" /></button>
             </div>
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Header */}
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Explore Classmates</h2>
             <p className="text-gray-500 text-sm mt-1">Find students with shared interests</p>
           </div>
 
-          {/* Search + Filters */}
           <div className="flex gap-3 mb-4 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -197,12 +162,10 @@ export default function ExploreClassmatesPage() {
             </select>
           </div>
 
-          {/* Count */}
           <p className="text-sm text-gray-500 mb-4">
             Showing <span className="font-bold text-gray-900">{classmates.length}</span> students
           </p>
 
-          {/* Student Cards Grid */}
           {isLoading ? (
             <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-indigo-400 animate-spin" /></div>
           ) : classmates.length > 0 ? (
@@ -212,7 +175,6 @@ export default function ExploreClassmatesPage() {
                 const classLabel = getClassLabel(c.semester, c.year)
                 return (
                   <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all">
-                    {/* Top row: avatar + info */}
                     <div className="flex items-start gap-4 mb-4">
                       <UserAvatar src={c.profileImage} firstName={c.firstName} lastName={c.lastName} size={56} />
                       <div className="flex-1 min-w-0">
@@ -221,8 +183,6 @@ export default function ExploreClassmatesPage() {
                         {classLabel && <p className="text-xs text-gray-400 mt-0.5">{classLabel}</p>}
                       </div>
                     </div>
-
-                    {/* Interest tags */}
                     {interests.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-4">
                         {interests.map((tag, i) => (
@@ -230,8 +190,6 @@ export default function ExploreClassmatesPage() {
                         ))}
                       </div>
                     )}
-
-                    {/* Connect button */}
                     <button onClick={() => handleConnect(c)}
                       className="w-full py-2.5 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 transition-all">
                       Connect
