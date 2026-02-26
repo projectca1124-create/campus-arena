@@ -47,6 +47,7 @@ export default function ExploreClassmatesPage() {
   const [yearFilter, setYearFilter] = useState('')
   const [availableMajors, setAvailableMajors] = useState<string[]>([])
   const [availableYears, setAvailableYears] = useState<string[]>([])
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -81,7 +82,8 @@ export default function ExploreClassmatesPage() {
   }, [searchQuery, majorFilter, yearFilter])
 
   const handleConnect = (classmate: Classmate) => { router.push('/home') }
-  const handleLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
+  const handleLogout = () => { setShowLogoutModal(true) }
+  const confirmLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
 
   const getClassLabel = (semester?: string, year?: string) => {
     if (!semester || !year) return ''
@@ -207,6 +209,18 @@ export default function ExploreClassmatesPage() {
           )}
         </div>
       </div>
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowLogoutModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Leaving Campus Arena?</h2>
+            <p className="text-sm text-gray-500 mb-6">You're leaving Campus Arena. Are you sure?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogoutModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 font-semibold text-sm">No, Stay Here</button>
+              <button onClick={confirmLogout} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">Yes, Log Out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

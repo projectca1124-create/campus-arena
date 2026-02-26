@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { User, Camera } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import SignupSuccessPage from './SignupSuccessPage'
+import SearchableMajorDropdown from './SearchableMajorDropdown'
 
 interface ProfileInfoStepProps {
   email: string
@@ -11,6 +12,7 @@ interface ProfileInfoStepProps {
   onSuccess: (profileData: {
     firstName: string
     lastName: string
+    degree: string
     major: string
     semester: string
     year: string
@@ -26,6 +28,8 @@ const years = Array.from({ length: 10 }, (_, i) =>
   (new Date().getFullYear() - 5 + i).toString()
 )
 
+const degreeOptions = ['Undergraduate', 'Graduate']
+
 export default function ProfileInfoStep({
   email,
   password,
@@ -35,6 +39,7 @@ export default function ProfileInfoStep({
   const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [degree, setDegree] = useState('')
   const [major, setMajor] = useState('')
   const [semester, setSemester] = useState('')
   const [year, setYear] = useState(new Date().getFullYear().toString())
@@ -56,6 +61,11 @@ export default function ProfileInfoStep({
     }
   }
 
+  const handleMajorChange = (value: string) => {
+    setMajor(value)
+    setError('')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -63,6 +73,11 @@ export default function ProfileInfoStep({
     // Validation
     if (!firstName || !lastName) {
       setError('First and last name are required')
+      return
+    }
+
+    if (!degree) {
+      setError('Degree level is required')
       return
     }
 
@@ -91,6 +106,7 @@ export default function ProfileInfoStep({
           password,
           firstName,
           lastName,
+          degree,
           major,
           semester,
           year,
@@ -216,22 +232,41 @@ export default function ProfileInfoStep({
           </div>
         </div>
 
-        {/* Major */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-900 mb-2">
-            Major
-          </label>
-          <input
-            type="text"
-            value={major}
-            onChange={(e) => {
-              setMajor(e.target.value)
-              setError('')
-            }}
-            placeholder="Computer Science"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
-            disabled={isLoading}
-          />
+        {/* Degree & Major - Same Line */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Degree Dropdown */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
+              Degree Level *
+            </label>
+            <select
+              value={degree}
+              onChange={(e) => {
+                setDegree(e.target.value)
+                setError('')
+              }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:border-blue-500 focus:ring-blue-500"
+              disabled={isLoading}
+            >
+              <option value="">Select degree</option>
+              {degreeOptions.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Major - Searchable Dropdown */}
+          <div>
+            <SearchableMajorDropdown
+              value={major}
+              onChange={handleMajorChange}
+              label="Major"
+              required={true}
+              disabled={isLoading}
+            />
+          </div>
         </div>
 
         {/* Semester & Year */}
@@ -307,7 +342,7 @@ export default function ProfileInfoStep({
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading || !firstName || !lastName || !major || !semester}
+          disabled={isLoading || !firstName || !lastName || !degree || !major || !semester}
           className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Creating account...' : 'Enter the Arena'}

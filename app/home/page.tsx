@@ -1,5 +1,6 @@
 'use client'
 
+
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import NotificationBell from '@/components/NotificationBell'
@@ -8,6 +9,7 @@ import {
   LayoutList, Megaphone, MessageSquare, Home, X, Paperclip, Image as ImageIcon,
   Smile, Info, MoreVertical, MessageCircle,
 } from 'lucide-react'
+
 
 // ─── Types ───────────────────────────────────────────────────────
 interface User {
@@ -42,7 +44,9 @@ interface Classmate {
   year?: string; funFact?: string; profileImage?: string; university?: string
 }
 
+
 const EMOJI_OPTIONS = ['👍', '❤️', '🤗', '😂', '🔥', '👏']
+
 
 // ─── Avatar ──────────────────────────────────────────────────────
 function UserAvatar({ src, firstName, lastName, size = 36, className = '' }: {
@@ -56,19 +60,23 @@ function UserAvatar({ src, firstName, lastName, size = 36, className = '' }: {
   )
 }
 
+
 function formatTime(dateStr: string) {
   return new Date(dateStr).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
 }
+
 
 // ─── Group Initials (for info panel icon) ────────────────────────
 function getGroupInitials(name: string) {
   return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
 
+
 // ─── Main Component ──────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter()
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
 
   const [user, setUser] = useState<User | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
@@ -81,10 +89,12 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'groups' | 'dms'>('groups')
   const [searchQuery, setSearchQuery] = useState('')
 
+
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [groupForm, setGroupForm] = useState({ name: '', description: '' })
   const [groupErrors, setGroupErrors] = useState<Record<string, string>>({})
   const [isCreating, setIsCreating] = useState(false)
+
 
   const [dmConversations, setDmConversations] = useState<DMConversation[]>([])
   const [selectedDM, setSelectedDM] = useState<DMConversation | null>(null)
@@ -92,20 +102,26 @@ export default function HomePage() {
   const [newDMMessage, setNewDMMessage] = useState('')
   const [isSendingDM, setIsSendingDM] = useState(false)
 
+
   const [showPingModal, setShowPingModal] = useState(false)
   const [pingSearchQuery, setPingSearchQuery] = useState('')
   const [pingClassmates, setPingClassmates] = useState<Classmate[]>([])
   const [isLoadingPing, setIsLoadingPing] = useState(false)
 
+
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
+
 
   // Group Info panel
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [memberYearFilter, setMemberYearFilter] = useState('')
   const [memberSemesterFilter, setMemberSemesterFilter] = useState('')
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, dmMessages])
+
 
   useEffect(() => {
     const loadData = async () => {
@@ -124,12 +140,14 @@ export default function HomePage() {
     loadData()
   }, [router])
 
+
   const loadMessages = async (groupId: string) => {
     setIsLoadingMessages(true)
     try { const res = await fetch(`/api/messages?groupId=${groupId}`); if (res.ok) { const d = await res.json(); setMessages(d.messages || []) } }
     catch (err) { console.error('Error:', err) }
     finally { setIsLoadingMessages(false) }
   }
+
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -142,6 +160,7 @@ export default function HomePage() {
     } catch (err) { console.error('Error:', err) }
     finally { setIsSendingMessage(false) }
   }
+
 
   const handleCreateGroup = async () => {
     const errs: Record<string, string> = {}
@@ -158,9 +177,19 @@ export default function HomePage() {
     finally { setIsCreating(false) }
   }
 
+
   const handleSelectChat = (group: Group) => {
     setSelectedChat(group); setSelectedDM(null); setShowGroupInfo(false); loadMessages(group.id)
   }
+  // Poll group messages every 3 seconds when a group is selected
+  useEffect(() => {
+    if (!selectedChat) return
+    const interval = setInterval(() => {
+      loadMessages(selectedChat.id)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [selectedChat?.id])
+
 
   const handleReaction = async (messageId: string, emoji: string) => {
     if (!user) return; setShowEmojiPicker(null)
@@ -170,6 +199,7 @@ export default function HomePage() {
       if (res.ok && selectedChat) { loadMessages(selectedChat.id) }
     } catch (err) { console.error('Error:', err) }
   }
+
 
   const loadDMMessages = async (otherUserId: string) => {
     if (!user) return; setIsLoadingMessages(true)
@@ -181,6 +211,27 @@ export default function HomePage() {
     setSelectedDM(conv); setSelectedChat(null); setShowGroupInfo(false); loadDMMessages(conv.user.id)
     setDmConversations(p => p.map(c => c.user.id === conv.user.id ? { ...c, unreadCount: 0 } : c))
   }
+  // Poll DM messages every 3 seconds when a DM is selected
+  useEffect(() => {
+    if (!selectedDM || !user) return
+    const interval = setInterval(() => {
+      loadDMMessages(selectedDM.user.id)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [selectedDM?.user.id, user?.id])
+
+
+  // Poll DM conversation list every 5 seconds for new conversations/unread counts
+  useEffect(() => {
+    if (!user) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/dm?userId=${user.id}`)
+        if (res.ok) { const d = await res.json(); setDmConversations(d.conversations || []) }
+      } catch (err) { console.error('Error polling DMs:', err) }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [user?.id])
   const handleSendDM = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newDMMessage.trim() || !selectedDM || !user) return; setIsSendingDM(true)
@@ -200,6 +251,7 @@ export default function HomePage() {
     }
   }
 
+
   const openPingModal = () => { setShowPingModal(true); setPingSearchQuery(''); loadPingClassmates('') }
   const loadPingClassmates = async (search: string) => {
     if (!user) return; setIsLoadingPing(true)
@@ -209,16 +261,20 @@ export default function HomePage() {
   }
   useEffect(() => { if (showPingModal) { const t = setTimeout(() => loadPingClassmates(pingSearchQuery), 300); return () => clearTimeout(t) } }, [pingSearchQuery, showPingModal])
 
-  const handleLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
+
+  const handleLogout = () => { setShowLogoutModal(true) }
+  const confirmLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
   const filteredGroups = groups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.description?.toLowerCase().includes(searchQuery.toLowerCase()))
   const filteredDMs = dmConversations.filter(c => `${c.user.firstName} ${c.user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()))
   const totalUnread = dmConversations.reduce((s, c) => s + c.unreadCount, 0)
+
 
   const groupReactions = (reactions: Reaction[] = []) => {
     const map: Record<string, { count: number; userReacted: boolean }> = {}
     for (const r of reactions) { if (!map[r.emoji]) map[r.emoji] = { count: 0, userReacted: false }; map[r.emoji].count++; if (r.userId === user?.id) map[r.emoji].userReacted = true }
     return map
   }
+
 
   // ─── Group Info helpers ──────────────────────────────────────
   const getGroupMembers = () => {
@@ -236,15 +292,18 @@ export default function HomePage() {
     return members
   }
 
+
   const getAvailableYears = () => {
     if (!selectedChat) return []
     return [...new Set(selectedChat.members?.map(m => m.user.year).filter(Boolean) as string[])]
   }
 
+
   const getAvailableSemesters = () => {
     if (!selectedChat) return []
     return [...new Set(selectedChat.members?.map(m => m.user.semester).filter(Boolean) as string[])]
   }
+
 
   const toggleGroupInfo = () => {
     setShowGroupInfo(p => !p)
@@ -252,6 +311,7 @@ export default function HomePage() {
     setMemberYearFilter('')
     setMemberSemesterFilter('')
   }
+
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-screen bg-white">
@@ -262,12 +322,15 @@ export default function HomePage() {
     </div>
   )
 
+
   const isGroupMode = selectedChat !== null
   const isDMMode = selectedDM !== null
   const filteredMembers = getGroupMembers()
 
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden" onClick={() => setShowEmojiPicker(null)}>
+
 
       {/* ===== LEFT SIDEBAR ===== */}
       <aside className="w-[210px] bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
@@ -293,23 +356,21 @@ export default function HomePage() {
         </div>
       </aside>
 
+
       {/* ===== MIDDLE PANEL ===== */}
       <aside className="w-[340px] bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
         <div className="px-5 pt-5 pb-4 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Chat</h2>
-          <div className="flex gap-0 mb-4 border border-gray-200 rounded-full overflow-hidden">
-            <button onClick={() => setActiveTab('groups')} className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold transition-all ${activeTab === 'groups' ? 'bg-white text-gray-900 shadow-sm' : 'bg-gray-50 text-gray-400 hover:text-gray-500'}`}>
-              Groups <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-bold rounded-full bg-indigo-600 text-white">{groups.length}</span>
+          <div className="relative flex mb-4 bg-gray-100 rounded-xl p-1">
+            <div className="absolute top-1 bottom-1 rounded-lg bg-indigo-600 shadow-md transition-all duration-300 ease-in-out" style={{ width: 'calc(50% - 4px)', left: activeTab === 'groups' ? '4px' : 'calc(50% + 0px)' }}></div>
+            <button onClick={() => setActiveTab('groups')} className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 ${activeTab === 'groups' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+              Groups{groups.reduce((sum, g) => sum + (g.messages?.length || 0), 0) > 0 ? ` (${groups.reduce((sum, g) => sum + (g.messages?.length || 0), 0)})` : ''}
             </button>
-            <button onClick={() => setActiveTab('dms')} className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold transition-all ${activeTab === 'dms' ? 'bg-white text-gray-900 shadow-sm' : 'bg-gray-50 text-gray-400 hover:text-gray-500'}`}>
-              DMs <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-bold rounded-full bg-indigo-600 text-white">{totalUnread || dmConversations.length}</span>
+            <button onClick={() => setActiveTab('dms')} className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-300 ${activeTab === 'dms' ? 'text-white' : 'text-gray-500 hover:text-gray-700'}`}>
+              DMs{totalUnread > 0 ? ` (${totalUnread})` : ''}
             </button>
           </div>
-          {activeTab === 'groups' ? (
-            <button onClick={() => setShowCreateGroup(true)} className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"><Plus className="w-4 h-4" /> Create Group</button>
-          ) : (
-            <button onClick={() => router.push('/home/explore')} className="w-full py-3 bg-white text-indigo-600 border border-indigo-200 rounded-lg font-semibold text-sm hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"><Users className="w-4 h-4" /> Explore Classmates</button>
-          )}
+        
         </div>
         <div className="px-5 py-3 border-b border-gray-200">
           <div className="relative">
@@ -321,9 +382,9 @@ export default function HomePage() {
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {activeTab === 'groups' && (
             <div>
-              <div className="flex items-center justify-between mb-3 px-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">GROUPS</p>
-                <span className="text-[11px] text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 font-medium">{filteredGroups.length}</span>
+           <div className="flex items-center justify-between mb-3 px-1">
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">GROUPS ({filteredGroups.length})</p>
+                <button onClick={() => setShowCreateGroup(true)} className="text-[12px] text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-0.5"><Plus className="w-3.5 h-3.5" />Group</button>
               </div>
               <div className="space-y-2">
                 {filteredGroups.map(group => {
@@ -347,8 +408,8 @@ export default function HomePage() {
           {activeTab === 'dms' && (
             <div>
               <div className="flex items-center justify-between mb-3 px-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">DIRECT MESSAGES</p>
-                <button onClick={openPingModal} className="text-[12px] text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Ping Classmates</button>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">DMs ({filteredDMs.length})</p>
+                <button onClick={() => router.push('/home/explore')} className="text-[12px] text-indigo-600 font-semibold hover:text-indigo-700 flex items-center gap-1"><Search className="w-3.5 h-3.5" />Classmates</button>
               </div>
               <div className="space-y-2">
                 {filteredDMs.map(conv => {
@@ -370,6 +431,7 @@ export default function HomePage() {
           )}
         </div>
       </aside>
+
 
       {/* ===== MAIN CHAT AREA ===== */}
       <div className="flex-1 flex flex-col bg-gray-50 min-w-0">
@@ -400,6 +462,7 @@ export default function HomePage() {
             <NotificationBell userId={user?.id || ''} />
              {user && <button onClick={() => router.push('/home/profile')}><UserAvatar src={user.profileImage} firstName={user.firstName} lastName={user.lastName} size={36} className="border-2 border-gray-100 ml-1 cursor-pointer" /></button>}          </div>
         </div>
+
 
         {/* Messages + Info Panel wrapper */}
         <div className="flex-1 flex overflow-hidden">
@@ -476,6 +539,7 @@ export default function HomePage() {
               {!isGroupMode && !isDMMode && <EmptyChat title="Select a conversation" subtitle="Choose a group or DM to start chatting" />}
             </div>
 
+
             {/* Message Input */}
             {(isGroupMode || isDMMode) && (
               <div className="border-t border-gray-200 px-6 py-3 flex-shrink-0 bg-white">
@@ -497,6 +561,7 @@ export default function HomePage() {
             )}
           </div>
 
+
           {/* ===== GROUP INFO PANEL ===== */}
           {showGroupInfo && isGroupMode && selectedChat && (
             <div className="w-[300px] bg-white border-l border-gray-200 flex flex-col flex-shrink-0 overflow-hidden">
@@ -505,6 +570,7 @@ export default function HomePage() {
                 <h3 className="text-sm font-bold text-gray-900">Group Info</h3>
                 <button onClick={() => setShowGroupInfo(false)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-all"><X className="w-4 h-4" /></button>
               </div>
+
 
               {/* Group icon + name */}
               <div className="px-5 py-6 flex flex-col items-center border-b border-gray-200">
@@ -515,6 +581,7 @@ export default function HomePage() {
                 <p className="text-xs text-gray-500 mt-0.5">{selectedChat.members?.length || 0} members</p>
               </div>
 
+
               {/* Search members */}
               <div className="px-5 pt-4 pb-2">
                 <div className="relative">
@@ -523,6 +590,7 @@ export default function HomePage() {
                     className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white" />
                 </div>
               </div>
+
 
               {/* Filters */}
               <div className="px-5 py-2 flex gap-2">
@@ -539,6 +607,7 @@ export default function HomePage() {
                   {getAvailableSemesters().map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+
 
               {/* Members list */}
               <div className="px-5 pt-2 pb-1">
@@ -571,6 +640,7 @@ export default function HomePage() {
         </div>
       </div>
 
+
       {/* ===== CREATE GROUP MODAL ===== */}
       {showCreateGroup && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowCreateGroup(false)}>
@@ -597,6 +667,7 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
 
       {/* ===== PING CLASSMATES MODAL ===== */}
       {showPingModal && (
@@ -627,9 +698,26 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* ===== LOGOUT CONFIRMATION MODAL ===== */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowLogoutModal(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Leaving Campus Arena?</h2>
+            <p className="text-sm text-gray-500 mb-6">You're leaving Campus Arena. Are you sure?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogoutModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 font-semibold text-sm">No, Stay Here</button>
+              <button onClick={confirmLogout} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">Yes, Log Out</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+      
+   
+
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void }) {
   return (
@@ -638,6 +726,7 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; labe
     </button>
   )
 }
+
 
 function EmptyChat({ title, subtitle }: { title: string; subtitle: string }) {
   return (

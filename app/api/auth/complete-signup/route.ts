@@ -1,195 +1,62 @@
 // app/api/auth/complete-signup/route.ts
-
+// Updated to auto-create degree+major groups
 
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
-
 const prisma = new PrismaClient()
-
-
-// Helper function to extract university from email
-function extractUniversity(email: string): string {
-  const domain = email.split('@')[1]?.toLowerCase() || ''
-  const parts = domain.replace('.edu', '').split('.')
-  const mainDomain = parts[parts.length - 1].toUpperCase()
-  return mainDomain
-}
-
-
-// Helper function to create default groups for university
-async function createDefaultGroupsForUniversity(
-  university: string,
-  userId: string,
-  major: string,
-  semester: string,
-  year: string
-) {
-  try {
-    console.log(`📚 Creating default groups for ${university}...`)
-
-
-    // ── 1. University Arena Group (shared across all users at this university) ──
-    let arenaGroup = await prisma.group.findFirst({
-      where: {
-        university: university,
-        isDefault: true,
-        type: 'general',
-      },
-    })
-
-
-    if (!arenaGroup) {
-      console.log('Creating new Arena group...')
-      arenaGroup = await prisma.group.create({
-        data: {
-          name: `${university} Arena`,
-          description: `Welcome to the ${university} campus-wide community`,
-          university: university,
-          type: 'general',
-          isDefault: true,
-          icon: '🏫',
-        },
-      })
-      console.log(`✅ Created ${university} Arena group`)
-    }
-
-
-    // Add user to arena group if not already a member
-    const existingArenaMember = await prisma.groupMember.findUnique({
-      where: {
-        userId_groupId: {
-          userId: userId,
-          groupId: arenaGroup.id,
-        },
-      },
-    })
-
-
-    if (!existingArenaMember) {
-      await prisma.groupMember.create({
-        data: {
-          groupId: arenaGroup.id,
-          userId: userId,
-        },
-      })
-      console.log(`✅ Added user to ${arenaGroup.name}`)
-    }
-
-
-    // ── 2. Major + Semester + Year Group (dynamic based on user's profile) ──
-    const majorGroupName = `${major} ${semester} ${year}`
-    const majorGroupDescription = `For students in ${major} courses`
-
-
-    let majorGroup = await prisma.group.findFirst({
-      where: {
-        name: majorGroupName,
-        university: university,
-        isDefault: true,
-      },
-    })
-
-
-    if (!majorGroup) {
-      console.log(`Creating new major group: ${majorGroupName}...`)
-      majorGroup = await prisma.group.create({
-        data: {
-          name: majorGroupName,
-          description: majorGroupDescription,
-          university: university,
-          type: 'class',
-          isDefault: true,
-          icon: '📚',
-        },
-      })
-      console.log(`✅ Created ${majorGroupName} group`)
-    }
-
-
-    // Add user to major group if not already a member
-    const existingMajorMember = await prisma.groupMember.findUnique({
-      where: {
-        userId_groupId: {
-          userId: userId,
-          groupId: majorGroup.id,
-        },
-      },
-    })
-
-
-    if (!existingMajorMember) {
-      await prisma.groupMember.create({
-        data: {
-          groupId: majorGroup.id,
-          userId: userId,
-        },
-      })
-      console.log(`✅ Added user to ${majorGroupName}`)
-    }
-  } catch (error) {
-    console.error('❌ Error creating default groups:', error)
-    throw error
-  }
-}
-
 
 export async function POST(request: Request) {
   try {
-    const { email, password, firstName, lastName, major, semester, year, funFact, profileImage } =
-      await request.json()
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      degree,
+      major,
+      semester,
+      year,
+      funFact,
+      profileImage,
+    } = await request.json()
 
-
-    const trimmedEmail = email.trim().toLowerCase()
-
-
-    console.log('📝 Complete signup for:', trimmedEmail)
-
-
-    // Validate required fields
-    if (!email || !password || !firstName || !lastName || !major || !semester || !year) {
-      console.log('❌ Missing required fields')
+    // Validation
+    if (!email || !password || !firstName || !lastName || !degree || !major) {
       return Response.json(
-        { error: 'All fields are required' },
+        { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
-
-    // Extract university from email
-    const university = extractUniversity(trimmedEmail)
-    console.log(`🏫 Extracted university: ${university}`)
-
+    console.log(`📝 Creating user: ${email}`)
 
     // Check if user already exists
-    console.log('🔍 Checking if user already exists...')
     const existingUser = await prisma.user.findUnique({
-      where: { email: trimmedEmail },
+      where: { email },
     })
 
-
     if (existingUser) {
-      console.log('❌ User already exists')
       return Response.json(
-        { error: 'User already exists' },
+        { error: 'Email already exists' },
         { status: 400 }
       )
     }
 
-
     // Hash password
-    console.log('🔐 Hashing password...')
     const hashedPassword = await bcrypt.hash(password, 10)
 
+    // Get university (assuming ASU for now - update as needed)
+    const university = 'Arizona State University'
 
-    // Create user with all profile fields
-    console.log('💾 Creating user in database...')
+    // Create user
     const user = await prisma.user.create({
       data: {
-        email: trimmedEmail,
+        email,
         password: hashedPassword,
         firstName,
         lastName,
+        degree,
         major,
         semester,
         year,
@@ -199,41 +66,59 @@ export async function POST(request: Request) {
       },
     })
 
+    console.log(`✅ User created: ${user.id}`)
 
-    console.log('✅ User created successfully:', user.id)
+    // AUTO-CREATE GROUP: Call the auto-create groups API
+    console.log(`🔄 Auto-creating degree+major group...`)
+    
+    try {
+      const groupResponse = await fetch(
+        `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/groups/auto-create`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            degree: degree,
+            major: major,
+            university: university,
+          }),
+        }
+      )
 
+      const groupData = await groupResponse.json()
 
-    // Create default groups using the user's actual major, semester, and year
-    await createDefaultGroupsForUniversity(university, user.id, major, semester, year)
+      if (groupResponse.ok) {
+        console.log(`✅ User auto-added to group: ${groupData.group.name}`)
+      } else {
+        console.warn(`⚠️  Group creation warning: ${groupData.error}`)
+        // Don't fail signup if group creation fails
+      }
+    } catch (groupError) {
+      console.error(`⚠️  Error auto-creating group:`, groupError)
+      // Don't fail signup if group creation fails
+    }
 
-
-    // Delete OTP token (one-time use)
-    console.log('🗑️ Deleting OTP token...')
-    await prisma.oTPToken.deleteMany({
-      where: { email: trimmedEmail },
-    })
-
-
-    console.log('🎉 Signup complete!')
-
-
+    // Return user without password
     return Response.json({
       success: true,
-      message: 'Account created successfully',
       user: {
         id: user.id,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        university: user.university,
+        degree: user.degree,
         major: user.major,
         semester: user.semester,
         year: user.year,
+        university: user.university,
         profileImage: user.profileImage,
       },
     })
   } catch (error) {
-    console.error('❌ Complete signup error:', error)
+    console.error('❌ Signup error:', error)
     return Response.json(
       { error: 'Failed to create account', details: String(error) },
       { status: 500 }

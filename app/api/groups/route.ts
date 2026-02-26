@@ -28,6 +28,7 @@ export async function GET(request: Request) {
                     lastName: true,
                     university: true,
                     major: true,
+                    degree: true,
                     semester: true,
                     year: true,
                     profileImage: true,
@@ -62,6 +63,8 @@ export async function GET(request: Request) {
       type: gm.group.type,
       isDefault: gm.group.isDefault,
       university: gm.group.university,
+      degree: gm.group.degree, // Add degree to response
+      major: gm.group.major,   // Add major to response
       members: gm.group.members,
       messages: gm.group.messages,
     }))
