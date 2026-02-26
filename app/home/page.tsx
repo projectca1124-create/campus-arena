@@ -181,15 +181,6 @@ export default function HomePage() {
   const handleSelectChat = (group: Group) => {
     setSelectedChat(group); setSelectedDM(null); setShowGroupInfo(false); loadMessages(group.id)
   }
-  // Poll group messages every 3 seconds when a group is selected
-  useEffect(() => {
-    if (!selectedChat) return
-    const interval = setInterval(() => {
-      loadMessages(selectedChat.id)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [selectedChat?.id])
-
 
   const handleReaction = async (messageId: string, emoji: string) => {
     if (!user) return; setShowEmojiPicker(null)
@@ -211,27 +202,6 @@ export default function HomePage() {
     setSelectedDM(conv); setSelectedChat(null); setShowGroupInfo(false); loadDMMessages(conv.user.id)
     setDmConversations(p => p.map(c => c.user.id === conv.user.id ? { ...c, unreadCount: 0 } : c))
   }
-  // Poll DM messages every 3 seconds when a DM is selected
-  useEffect(() => {
-    if (!selectedDM || !user) return
-    const interval = setInterval(() => {
-      loadDMMessages(selectedDM.user.id)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [selectedDM?.user.id, user?.id])
-
-
-  // Poll DM conversation list every 5 seconds for new conversations/unread counts
-  useEffect(() => {
-    if (!user) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/dm?userId=${user.id}`)
-        if (res.ok) { const d = await res.json(); setDmConversations(d.conversations || []) }
-      } catch (err) { console.error('Error polling DMs:', err) }
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [user?.id])
   const handleSendDM = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newDMMessage.trim() || !selectedDM || !user) return; setIsSendingDM(true)
