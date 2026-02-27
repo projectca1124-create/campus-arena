@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import SignUpTab from './components/SignUpTab'
 import LoginTab from './components/LoginTab'
+import SplashScreen from './components/SplashScreen'
 
 type SignUpStep = 1 | 2 | 3 | 4
 
@@ -13,6 +14,8 @@ export default function AuthPage() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<'signup' | 'login'>('signup')
   const [signUpStep, setSignUpStep] = useState<SignUpStep>(1)
+  const [showSplash, setShowSplash] = useState(false)
+  const [signUpEmail, setSignUpEmail] = useState('')
 
   // Set active tab from URL parameter
   useEffect(() => {
@@ -52,10 +55,14 @@ export default function AuthPage() {
     }
   }
 
-  return (
+  
+    if (showSplash) {
+      return <SplashScreen email={signUpEmail} />
+    }
+
+    return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Header */}
+       <div className="w-full max-w-md">        {/* Header */}
         <div className="text-center mb-12">
           <Link href="/" className="inline-flex items-center space-x-2 mb-8">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
@@ -91,7 +98,7 @@ export default function AuthPage() {
           {/* Progress indicators - DYNAMIC FOR SIGNUP */}
           {activeTab === 'signup' && (
             <div className="flex gap-2 justify-center mb-12">
-              {[1, 2, 3, 4].map((step) => {
+              {[1, 2, 3].map((step) => {
                 const state = getProgressCircle(step as SignUpStep)
                 return (
                   <div
@@ -115,6 +122,10 @@ export default function AuthPage() {
           <SignUpTab 
             onTabChange={handleTabChange}
             onStepChange={handleSignUpStepChange}
+            onSignupComplete={(email: string) => {
+              setSignUpEmail(email)
+              setShowSplash(true)
+            }}
           />
         ) : (
           <LoginTab onTabChange={handleTabChange} />

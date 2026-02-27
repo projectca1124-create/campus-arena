@@ -9,22 +9,26 @@ datasource db {
 
 // ─── User ────────────────────────────────────────────────────────
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  password      String
-  firstName     String?
-  lastName      String?
-  university    String?
-  major         String?
-  semester      String?
-  year          String?
-  funFact       String?
-  profileImage  String?
-  hometown      String?
-  bio           String?
-  minor         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  password           String
+  firstName          String?
+  lastName           String?
+  university         String?
+  major              String?
+  degree             String?
+  semester           String?
+  year               String?
+  funFact            String?
+  profileImage       String?
+  hometown           String?
+  bio                String?
+  minor              String?
+  academicStanding   String?
+  interests          String?
+  onboardingComplete Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   groups              GroupMember[]
   messages            Message[]
@@ -53,6 +57,9 @@ model Group {
   type        String   @default("custom")
   isDefault   Boolean  @default(false)
   university  String?
+  identifier  String?
+  degree      String?
+  major       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -61,6 +68,7 @@ model Group {
 
   @@index([university])
   @@index([isDefault])
+  @@index([identifier])
 }
 
 model GroupMember {
@@ -81,6 +89,10 @@ model GroupMember {
 model Message {
   id        String   @id @default(cuid())
   content   String
+  fileUrl   String?
+  fileName  String?
+  fileType  String?
+  imageUrl  String?
   groupId   String
   userId    String
   createdAt DateTime @default(now())
@@ -115,6 +127,10 @@ model MessageReaction {
 model DirectMessage {
   id         String   @id @default(cuid())
   content    String
+  fileUrl    String?
+  fileName   String?
+  fileType   String?
+  imageUrl   String?
   senderId   String
   receiverId String
   read       Boolean  @default(false)
@@ -298,6 +314,7 @@ model CampusTalkResponse {
   @@index([campusTalkId])
   @@index([userId])
 }
+
 model Notification {
   id        String   @id @default(cuid())
   userId    String

@@ -169,3 +169,31 @@ export async function POST(request: Request) {
     )
   }
 }
+// Add this DELETE handler 
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const { userId } = await request.json()
+
+    if (!id || !userId) {
+      return Response.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Verify ownership
+    const talk = await prisma.campusTalk.findUnique({ where: { id } })
+    if (!talk) return Response.json({ error: 'Not found' }, { status: 404 })
+    if (talk.userId !== userId) return Response.json({ error: 'Unauthorized' }, { status: 403 })
+
+    // Delete all responses first, then the talk
+    await prisma.campusTalkResponse.deleteMany({ where: { campusTalkId: id } })
+    await prisma.campusTalk.delete({ where: { id } })
+
+    return Response.json({ success: true })
+  } catch (error) {
+    console.error('Delete talk error:', error)
+    return Response.json({ error: 'Failed to delete' }, { status: 500 })
+  }
+}

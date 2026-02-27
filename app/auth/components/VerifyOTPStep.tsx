@@ -16,7 +16,8 @@ export default function VerifyOTPStep({
 }: VerifyOTPStepProps) {
   const [otp, setOtp] = useState(['', '', '', '', '', ''])
   const [error, setError] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [isResending, setIsResending] = useState(false)
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   // Handle individual box input
@@ -82,7 +83,7 @@ export default function VerifyOTPStep({
       return
     }
 
-    setIsLoading(true)
+    setIsVerifying(true)
 
     try {
       const response = await fetch('/api/auth/verify-otp', {
@@ -108,14 +109,14 @@ export default function VerifyOTPStep({
       const message = err instanceof Error ? err.message : 'Something went wrong'
       setError(message)
     } finally {
-      setIsLoading(false)
+      setIsVerifying(false)
     }
   }
 
   // Resend OTP
   const handleResendOTP = async () => {
     setError('')
-    setIsLoading(true)
+    setIsResending(true)
 
     try {
       const response = await fetch('/api/auth/send-otp', {
@@ -142,7 +143,7 @@ export default function VerifyOTPStep({
       const message = err instanceof Error ? err.message : 'Failed to resend OTP'
       setError(message)
     } finally {
-      setIsLoading(false)
+      setIsResending(false)
     }
   }
 
@@ -188,7 +189,7 @@ export default function VerifyOTPStep({
                     ? 'border-red-500 focus:border-red-500 bg-red-50'
                     : 'border-gray-300 focus:border-blue-500 bg-gray-50'
                 }`}
-                disabled={isLoading}
+                disabled={isVerifying || isResending}
               />
             ))}
           </div>
@@ -217,10 +218,10 @@ export default function VerifyOTPStep({
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading || otp.join('').length < 6}
+          disabled={isVerifying || isResending || otp.join('').length < 6}
           className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Verifying...' : 'Verify Code'}
+          {isVerifying ? 'Verifying...' : 'Verify Code'}
         </button>
       </form>
 
@@ -236,16 +237,16 @@ export default function VerifyOTPStep({
         {/* Resend OTP Button */}
         <button
           onClick={handleResendOTP}
-          disabled={isLoading}
+          disabled={isVerifying || isResending}
           className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:border-blue-600 hover:text-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Resending...' : 'Resend Code'}
+          {isResending ? 'Resending...' : 'Resend Code'}
         </button>
 
         {/* Change Email Link */}
         <button
           onClick={onChangeEmail}
-          disabled={isLoading}
+          disabled={isVerifying || isResending}
           className="w-full py-2 text-gray-600 hover:text-gray-900 font-medium inline-flex items-center justify-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />

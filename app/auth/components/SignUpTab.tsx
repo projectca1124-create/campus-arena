@@ -6,14 +6,17 @@ import { Mail, ArrowLeft } from 'lucide-react'
 // Step components
 import VerifyOTPStep from './VerifyOTPStep'
 import CreatePasswordStep from './CreatePasswordStep'
-import ProfileInfoStep from './ProfileInfoStep'
+
 
 interface SignUpTabProps {
   onTabChange: (tab: 'signup' | 'login') => void
-  onStepChange?: (step: 1 | 2 | 3 | 4) => void
+  onStepChange?: (step: 1 | 2 | 3) => void
+  onSignupComplete?: (email: string) => void
 }
 
-type SignUpStep = 1 | 2 | 3 | 4
+type SignUpStep = 1 | 2 | 3
+
+
 
 interface SignUpData {
   email: string
@@ -27,7 +30,7 @@ interface SignUpData {
   profileImage?: string
 }
 
-export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps) {
+export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete }: SignUpTabProps)  {
   const [currentStep, setCurrentStep] = useState<SignUpStep>(1)
   const [signUpData, setSignUpData] = useState<Partial<SignUpData>>({})
   const [error, setError] = useState('')
@@ -124,19 +127,16 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
   }
 
   // Step 3: Password Creation - move to step 4
+  // Step 3: Password Creation - account created, show splash
   const handlePasswordSuccess = (password: string) => {
     setSignUpData({ ...signUpData, password })
-    updateStep(4)
     setError('')
+    // Trigger splash screen in parent
+    onSignupComplete?.(signUpData.email || '')
   }
 
   // Step 4: Profile Info - Account creation complete
-  const handleProfileSuccess = (profileData: any) => {
-    // All data collected, account created
-    console.log('✅ Account created:', { ...signUpData, ...profileData })
-    // Redirect to dashboard or home
-    window.location.href = '/home'
-  }
+  
 
   // Render Step 1: Email Entry
   if (currentStep === 1) {
@@ -262,16 +262,7 @@ export default function SignUpTab({ onTabChange, onStepChange }: SignUpTabProps)
   }
 
   // Render Step 4: Profile Information
-  if (currentStep === 4) {
-    return (
-      <ProfileInfoStep
-        email={signUpData.email || ''}
-        password={signUpData.password || ''}
-        onSuccess={handleProfileSuccess}
-        onTabChange={onTabChange}
-      />
-    )
-  }
+  
 
   return null
 }

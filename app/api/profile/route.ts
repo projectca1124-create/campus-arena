@@ -4,6 +4,26 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+const USER_SELECT = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  university: true,
+  major: true,
+  degree: true,
+  semester: true,
+  year: true,
+  funFact: true,
+  profileImage: true,
+  hometown: true,
+  bio: true,
+  minor: true,
+  academicStanding: true,
+  interests: true,
+  onboardingComplete: true,
+}
+
 // GET - fetch user profile with activity stats
 export async function GET(request: Request) {
   try {
@@ -16,21 +36,7 @@ export async function GET(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        university: true,
-        major: true,
-        semester: true,
-        year: true,
-        funFact: true,
-        profileImage: true,
-        hometown: true,
-        bio: true,
-        minor: true,
-      },
+      select: USER_SELECT,
     })
 
     if (!user) {
@@ -67,47 +73,38 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
-    const { userId, firstName, lastName, major, semester, year, funFact, profileImage, bio, hometown, minor, interests } = body
+    const { userId, firstName, lastName, major, semester, year, funFact, profileImage, bio, hometown, minor, interests, degree, academicStanding } = body
 
     if (!userId) {
       return Response.json({ error: 'userId is required' }, { status: 400 })
     }
 
     let updatedFunFact = funFact
+    let updatedInterests: string | undefined
     if (interests && Array.isArray(interests)) {
       updatedFunFact = interests.join(', ')
+      updatedInterests = interests.join(', ')
     }
 
     const updateData: any = {}
     if (firstName !== undefined) updateData.firstName = firstName.trim()
     if (lastName !== undefined) updateData.lastName = lastName.trim()
     if (major !== undefined) updateData.major = major.trim()
+    if (degree !== undefined) updateData.degree = degree.trim()
     if (semester !== undefined) updateData.semester = semester
     if (year !== undefined) updateData.year = year.trim()
     if (updatedFunFact !== undefined) updateData.funFact = updatedFunFact
+    if (updatedInterests !== undefined) updateData.interests = updatedInterests
     if (profileImage !== undefined) updateData.profileImage = profileImage
     if (bio !== undefined) updateData.bio = bio.trim()
     if (hometown !== undefined) updateData.hometown = hometown.trim()
     if (minor !== undefined) updateData.minor = minor.trim()
+    if (academicStanding !== undefined) updateData.academicStanding = academicStanding
 
     const user = await prisma.user.update({
       where: { id: userId },
       data: updateData,
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        university: true,
-        major: true,
-        semester: true,
-        year: true,
-        funFact: true,
-        profileImage: true,
-        hometown: true,
-        bio: true,
-        minor: true,
-      },
+      select: USER_SELECT,
     })
 
     return Response.json({ success: true, user })

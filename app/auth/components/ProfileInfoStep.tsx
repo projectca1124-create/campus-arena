@@ -146,7 +146,7 @@ export default function ProfileInfoStep({
   }
 
   return (
-    <div className="bg-white rounded-2xl p-8 shadow-lg">
+    <div className="bg-white rounded-2xl p-10 shadow-lg max-w-2xl w-[700px] mx-auto">
       {/* Icon */}
       <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
         <User className="w-8 h-8 text-blue-600" />
@@ -257,6 +257,7 @@ export default function ProfileInfoStep({
             </select>
           </div>
 
+          
           {/* Major - Searchable Dropdown */}
           <div>
             <SearchableMajorDropdown
