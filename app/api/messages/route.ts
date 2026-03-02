@@ -1,46 +1,48 @@
-// app/api/messages/route.ts
-
+// Save as: app/api/messages/route.ts (replace existing)
 import { PrismaClient } from '@prisma/client'
-import { notifyGroupMessage } from '@/lib/notifications'
+import pusherServer from '@/lib/pusher-server'
 
 const prisma = new PrismaClient()
+
+const MESSAGE_SELECT = {
+  id: true, content: true, groupId: true, userId: true, createdAt: true,
+  fileUrl: true, fileName: true, fileType: true, imageUrl: true,
+  user: { select: { id: true, firstName: true, lastName: true, email: true, profileImage: true } },
+  reactions: { select: { id: true, emoji: true, messageId: true, userId: true, user: { select: { id: true, firstName: true, lastName: true } } } },
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const groupId = searchParams.get('groupId')
-    const after = searchParams.get('after') // For polling: only get messages after this timestamp
+    const after = searchParams.get('after')
 
-    if (!groupId) return Response.json({ error: 'groupId is required' }, { status: 400 })
+    if (!groupId) return Response.json({ error: 'groupId required' }, { status: 400 })
 
     const where: any = { groupId }
-    if (after) {
-      where.createdAt = { gt: new Date(after) }
-    }
+    if (after) where.createdAt = { gt: new Date(after) }
 
     const messages = await prisma.message.findMany({
       where,
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true, profileImage: true } },
-        reactions: { include: { user: { select: { id: true, firstName: true, lastName: true } } } },
-      },
+      select: MESSAGE_SELECT,
       orderBy: { createdAt: 'asc' },
-      take: 100,
+      take: after ? 50 : 100,
     })
 
-    return Response.json({ success: true, messages })
+    return Response.json({ messages })
   } catch (error) {
-    console.error('❌ Get messages error:', error)
-    return Response.json({ error: 'Failed to fetch messages', details: String(error) }, { status: 500 })
+    console.error('Get messages error:', error)
+    return Response.json({ error: 'Failed to get messages' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const { content, groupId, userId, fileUrl, fileName, fileType, imageUrl } = await request.json()
+    const body = await request.json()
+    const { content, groupId, userId, fileUrl, fileName, fileType, imageUrl, replyToId } = body
 
-    if (!groupId || !userId) return Response.json({ error: 'groupId and userId are required' }, { status: 400 })
-    if (!content && !fileUrl && !imageUrl) return Response.json({ error: 'content, file, or image is required' }, { status: 400 })
+    if (!groupId || !userId) return Response.json({ error: 'Missing fields' }, { status: 400 })
+    if (!content?.trim() && !fileUrl && !imageUrl) return Response.json({ error: 'Content required' }, { status: 400 })
 
     const message = await prisma.message.create({
       data: {
@@ -52,18 +54,17 @@ export async function POST(request: Request) {
         fileType: fileType || null,
         imageUrl: imageUrl || null,
       },
-      include: {
-        user: { select: { id: true, firstName: true, lastName: true, email: true, profileImage: true } },
-      },
+      select: MESSAGE_SELECT,
     })
 
-    const group = await prisma.group.findUnique({ where: { id: groupId }, select: { name: true } })
-    const senderName = `${message.user.firstName} ${message.user.lastName}`
-    notifyGroupMessage(groupId, userId, senderName, group?.name || 'Group').catch(() => {})
+    // ── Pusher: broadcast new message to group channel ──
+    await pusherServer.trigger(`group-${groupId}`, 'new-message', {
+      message,
+    }).catch(err => console.error('Pusher trigger error:', err))
 
-    return Response.json({ success: true, message })
+    return Response.json({ message })
   } catch (error) {
-    console.error('❌ Post message error:', error)
-    return Response.json({ error: 'Failed to create message', details: String(error) }, { status: 500 })
+    console.error('Send message error:', error)
+    return Response.json({ error: 'Failed to send message' }, { status: 500 })
   }
 }

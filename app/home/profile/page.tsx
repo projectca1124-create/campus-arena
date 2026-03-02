@@ -3,11 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Search, Users, Calendar, LayoutList, Megaphone, MessageSquare, Home, LogOut,
-  Bell, Loader2, Pencil, Camera, X, Save, MessageCircle, CheckCircle,
-  Lock, AlertCircle, Sparkles, ChevronDown,
+  Search, Loader2, Pencil, Camera, X, Save, MessageCircle, CheckCircle,
+  AlertCircle, Sparkles, ChevronDown,
 } from 'lucide-react'
-import NotificationBell from '@/components/NotificationBell'
 import { UTA_MAJORS } from '@/lib/majors'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -60,7 +58,6 @@ function MajorDropdown({ value, onChange, error }: {
     ? allOptions.filter(m => m.toLowerCase().includes(search.toLowerCase()))
     : allOptions
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setIsOpen(false)
@@ -91,7 +88,6 @@ function MajorDropdown({ value, onChange, error }: {
 
       {isOpen && (
         <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-          {/* Search input */}
           <div className="p-2 border-b border-gray-100">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -100,8 +96,6 @@ function MajorDropdown({ value, onChange, error }: {
                 className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white" />
             </div>
           </div>
-
-          {/* Options list */}
           <div className="max-h-[240px] overflow-y-auto">
             {filtered.length > 0 ? (
               filtered.map(major => (
@@ -114,10 +108,10 @@ function MajorDropdown({ value, onChange, error }: {
               ))
             ) : (
               <div className="px-4 py-6 text-center text-sm text-gray-400">
-                No majors match "{search}"
+                No majors match &ldquo;{search}&rdquo;
                 <button type="button" onClick={() => { handleSelect('Other'); setSearch('') }}
                   className="block mx-auto mt-2 text-indigo-600 font-semibold hover:underline">
-                  Select "Other" to enter manually
+                  Select &ldquo;Other&rdquo; to enter manually
                 </button>
               </div>
             )}
@@ -141,11 +135,9 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<'activity' | 'edit'>(isOnboarding ? 'edit' : 'activity')
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const [showLogoutModal, setShowLogoutModal] = useState(false)
   const [onboardingMode, setOnboardingMode] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Edit form
   const [editForm, setEditForm] = useState({
     firstName: '', lastName: '', degree: '', customDegree: '',
     major: '', customMajor: '', minor: '', semester: '', year: '',
@@ -153,7 +145,6 @@ export default function ProfilePage() {
   })
   const [selectedInterests, setSelectedInterests] = useState<string[]>([])
 
-  // ─── Load profile ────────────────────────────────────────────
   useEffect(() => {
     const loadProfile = async () => {
       try {
@@ -168,7 +159,6 @@ export default function ProfilePage() {
           setUser(data.user)
           setStats(data.stats)
 
-          // Only check onboarding from server data
           if (isOnboarding || !data.user.onboardingComplete) {
             setOnboardingMode(true)
             setActiveTab('edit')
@@ -180,7 +170,6 @@ export default function ProfilePage() {
               ? data.user.funFact.split(',').map((s: string) => s.trim()).filter(Boolean)
               : []
 
-          // Check if the saved major is in the dropdown list or custom
           const savedMajor = data.user.major || ''
           const isKnownMajor = UTA_MAJORS.includes(savedMajor)
 
@@ -209,12 +198,10 @@ export default function ProfilePage() {
     loadProfile()
   }, [router, isOnboarding])
 
-  // ─── Validate & Save ────────────────────────────────────────
   const handleSave = async () => {
     if (!user) return
     const errs: Record<string, string> = {}
 
-    // Always validate required fields
     if (!editForm.firstName.trim()) errs.firstName = 'Required'
     if (!editForm.lastName.trim()) errs.lastName = 'Required'
     if (!editForm.degree) errs.degree = 'Required'
@@ -231,7 +218,6 @@ export default function ProfilePage() {
     setIsSaving(true)
     setSaveSuccess(false)
 
-    // Resolve the actual major value
     const resolvedMajor = editForm.major === 'Other' ? editForm.customMajor.trim() : editForm.major
 
     try {
@@ -299,7 +285,6 @@ export default function ProfilePage() {
     }
   }
 
-  // ─── Profile image upload ───────────────────────────────────
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -331,9 +316,6 @@ export default function ProfilePage() {
     if (errors.interests) setErrors(p => ({ ...p, interests: '' }))
   }
 
-  const handleLogout = () => { setShowLogoutModal(true) }
-  const confirmLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
-
   const displayInterests = user?.interests
     ? user.interests.split(',').map(s => s.trim()).filter(Boolean)
     : user?.funFact
@@ -348,7 +330,7 @@ export default function ProfilePage() {
   }
 
   if (isLoading) return (
-    <div className="flex items-center justify-center h-screen bg-white">
+    <div className="flex items-center justify-center h-full">
       <div className="text-center">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
         <p className="text-gray-500 text-sm">Loading profile...</p>
@@ -357,57 +339,19 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* LEFT SIDEBAR */}
-      <aside className="w-[210px] bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
-        <div className="px-5 py-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center"><span className="text-white font-bold text-xs">CA</span></div>
-            <span className="font-bold text-[15px] text-gray-900">Campus Arena</span>
-          </div>
-        </div>
-        <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-0.5">
-          <NavItem icon={<MessageSquare className="w-[18px] h-[18px]" />} label="Chat"
-            disabled={onboardingMode} onClick={() => !onboardingMode && router.push('/home')} />
-          <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks"
-            disabled={onboardingMode} onClick={() => !onboardingMode && router.push('/home/campus-talks')} />
-        </nav>
-        <div className="px-3 py-4 border-t border-gray-200">
-          <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium">
-            <LogOut className="w-[18px] h-[18px]" /><span>Log out</span>
-          </button>
-        </div>
-      </aside>
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-4xl mx-auto p-6">
 
-      {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Bar */}
-        <div className="h-[60px] border-b border-gray-200 px-6 flex items-center justify-between flex-shrink-0 bg-white">
-          <h1 className="text-[15px] font-semibold text-gray-900">
-            {onboardingMode ? 'Complete Your Profile' : 'My Profile'}
-          </h1>
-          {user && !onboardingMode && (
-            <div className="flex items-center gap-3">
-              <NotificationBell userId={user?.id || ''} />
-              <UserAvatar src={user.profileImage} firstName={user.firstName} lastName={user.lastName} size={36} className="border-2 border-gray-100" />
-            </div>
-          )}
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-6">
-
-            {/* ─── ONBOARDING BANNER + PHOTO ──────────────────── */}
+            {/* ONBOARDING BANNER */}
             {onboardingMode && (
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 mb-6 text-white">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-3 mb-2">
                       <Sparkles className="w-6 h-6" />
-                      <h2 className="text-xl font-bold">Let's get a few details to personalize your experience</h2>
+                      <h2 className="text-xl font-bold">Let&apos;s get a few details to personalize your experience</h2>
                     </div>
-                    <p className="text-indigo-100 text-sm ml-9">Fill in the required fields below, then you're all set!</p>
+                    <p className="text-indigo-100 text-sm ml-9">Fill in the required fields below, then you&apos;re all set!</p>
                   </div>
                   <div className="relative flex-shrink-0 ml-6">
                     <UserAvatar src={user?.profileImage} firstName={user?.firstName || '?'} lastName="" size={80} className="border-4 border-white/30" />
@@ -422,7 +366,7 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* ─── PROFILE BANNER (non-onboarding) ────────────── */}
+            {/* PROFILE BANNER (non-onboarding) */}
             {!onboardingMode && (
               <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
                 <div className="h-[120px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-400"></div>
@@ -444,6 +388,7 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-4 mt-3 text-sm text-gray-600 flex-wrap">
                     {user?.major && <span className="flex items-center gap-1.5"><span className="text-gray-400">🎓</span> {user.major}</span>}
                     {user?.semester && user?.year && <span className="flex items-center gap-1.5"><span className="text-gray-400">📋</span> {user.semester} {user.year}</span>}
+                    {user?.academicStanding && <span className="flex items-center gap-1.5"><span className="text-gray-400">📊</span> {user.academicStanding}</span>}
                     {user?.hometown && <span className="flex items-center gap-1.5"><span className="text-gray-400">📍</span> {user.hometown}</span>}
                   </div>
                   {user?.bio && <p className="text-sm text-gray-600 mt-3 leading-relaxed">{user.bio}</p>}
@@ -458,7 +403,7 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Tabs (hidden during onboarding) */}
+            {/* Tabs */}
             {!onboardingMode && (
               <div className="flex gap-1 mb-6 border-b border-gray-200">
                 <button onClick={() => setActiveTab('activity')}
@@ -472,7 +417,7 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* ─── ACTIVITY TAB ─────────────────────────────────── */}
+            {/* ACTIVITY TAB */}
             {activeTab === 'activity' && !onboardingMode && (
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => router.push('/home/campus-talks?tab=my')} className="bg-white border border-gray-200 rounded-xl p-6 flex flex-col items-center text-center hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer">
@@ -488,7 +433,7 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* ─── EDIT / ONBOARDING FORM ───────────────────────── */}
+            {/* EDIT / ONBOARDING FORM */}
             {activeTab === 'edit' && (
               <div className="bg-white border border-gray-200 rounded-xl p-8">
                 <div className="flex items-center justify-between mb-6">
@@ -522,7 +467,6 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* Row 1: First Name, Last Name */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
                   <FormField label="First Name" required error={errors.firstName}>
                     <input type="text" value={editForm.firstName} onChange={(e) => updateField('firstName', e.target.value)}
@@ -534,7 +478,6 @@ export default function ProfilePage() {
                   </FormField>
                 </div>
 
-                {/* Row 2: Degree, Major */}
                 <div className="grid grid-cols-2 gap-6 mb-6">
                   <FormField label="Degree" required error={errors.degree}>
                     <select value={editForm.degree} onChange={(e) => { updateField('degree', e.target.value); updateField('academicStanding', '') }}
@@ -557,7 +500,6 @@ export default function ProfilePage() {
                   </FormField>
                 </div>
 
-                {/* Custom degree field */}
                 {editForm.degree === 'Other' && (
                   <div className="mb-6">
                     <FormField label="Enter your degree" required error={errors.customDegree}>
@@ -567,7 +509,6 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* Custom major field */}
                 {editForm.major === 'Other' && (
                   <div className="mb-6">
                     <FormField label="Enter your major" required error={errors.customMajor}>
@@ -577,7 +518,6 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* Row 3: Minor */}
                 <div className="mb-6">
                   <FormField label="Minor" optional>
                     <input type="text" value={editForm.minor} onChange={(e) => updateField('minor', e.target.value)}
@@ -585,7 +525,6 @@ export default function ProfilePage() {
                   </FormField>
                 </div>
 
-                {/* Row 4: Semester, Year, Standing */}
                 <div className="grid grid-cols-3 gap-6 mb-6">
                   <FormField label="Enrollment Semester" required error={errors.semester}>
                     <select value={editForm.semester} onChange={(e) => updateField('semester', e.target.value)}
@@ -614,7 +553,6 @@ export default function ProfilePage() {
                   )}
                 </div>
 
-                {/* Hometown */}
                 <div className="mb-6">
                   <FormField label="Hometown" optional>
                     <input type="text" value={editForm.hometown} onChange={(e) => updateField('hometown', e.target.value)}
@@ -622,7 +560,6 @@ export default function ProfilePage() {
                   </FormField>
                 </div>
 
-                {/* Bio */}
                 <div className="mb-8">
                   <FormField label="Bio" optional>
                     <textarea value={editForm.bio} onChange={(e) => updateField('bio', e.target.value)}
@@ -631,7 +568,6 @@ export default function ProfilePage() {
                   </FormField>
                 </div>
 
-                {/* Interests */}
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <label className="text-sm font-semibold text-gray-700">💡 Interests</label>
@@ -660,23 +596,7 @@ export default function ProfilePage() {
             )}
 
           </div>
-        </div>
       </div>
-
-      {/* LOGOUT MODAL */}
-      {showLogoutModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowLogoutModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Leaving Campus Arena?</h2>
-            <p className="text-sm text-gray-500 mb-6">You're leaving Campus Arena. Are you sure?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowLogoutModal(false)} className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 font-semibold text-sm">No, Stay Here</button>
-              <button onClick={confirmLogout} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-sm">Yes, Log Out</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -700,20 +620,4 @@ function inputClass(error?: string) {
   return `w-full px-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all ${
     error ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
   }`
-}
-
-function NavItem({ icon, label, active, disabled, onClick }: {
-  icon: React.ReactNode; label: string; active?: boolean; disabled?: boolean; onClick?: () => void
-}) {
-  return (
-    <button onClick={onClick} disabled={disabled}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm font-medium ${
-        disabled ? 'text-gray-300 cursor-not-allowed' :
-        active ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50'
-      }`}>
-      <span className="flex items-center justify-center w-5 h-5">{icon}</span>
-      <span>{label}</span>
-      {disabled && <Lock className="w-3 h-3 ml-auto text-gray-300" />}
-    </button>
-  )
 }

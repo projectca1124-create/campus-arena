@@ -33,6 +33,7 @@ model User {
   groups              GroupMember[]
   messages            Message[]
   messageReactions    MessageReaction[]
+  dmReactions         DMReaction[]         @relation("UserDMReactions")
   sentDMs             DirectMessage[]       @relation("SentDMs")
   receivedDMs         DirectMessage[]       @relation("ReceivedDMs")
   clubMemberships     ClubMember[]
@@ -93,11 +94,14 @@ model Message {
   fileName  String?
   fileType  String?
   imageUrl  String?
+  replyToId String?
   groupId   String
   userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  replyTo   Message?          @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[]         @relation("MessageReplies")
   group     Group             @relation(fields: [groupId], references: [id], onDelete: Cascade)
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   reactions MessageReaction[]
@@ -131,18 +135,38 @@ model DirectMessage {
   fileName   String?
   fileType   String?
   imageUrl   String?
+  replyToId  String?
   senderId   String
   receiverId String
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  sender   User @relation("SentDMs", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("ReceivedDMs", fields: [receiverId], references: [id], onDelete: Cascade)
+  replyTo   DirectMessage?  @relation("DMReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   DirectMessage[] @relation("DMReplies")
+  sender    User            @relation("SentDMs", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver  User            @relation("ReceivedDMs", fields: [receiverId], references: [id], onDelete: Cascade)
+  reactions DMReaction[]
 
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
+}
+
+// ─── DM Reactions ────────────────────────────────────────────────
+model DMReaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User          @relation("UserDMReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
 }
 
 // ─── Clubs ───────────────────────────────────────────────────────

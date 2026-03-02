@@ -1,5 +1,4 @@
-// app/api/users/[id]/route.ts
-
+// Save as: app/api/users/[id]/route.ts (replace existing)
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -34,6 +33,12 @@ export async function GET(
         academicStanding: true,
         interests: true,
         funFact: true,
+        _count: {
+          select: {
+            campusTalks: true,
+            campusTalkResponses: true,
+          },
+        },
       },
     })
 
@@ -41,9 +46,18 @@ export async function GET(
       return Response.json({ error: 'User not found' }, { status: 404 })
     }
 
-    return Response.json({ success: true, user })
+    const { _count, ...userData } = user
+
+    return Response.json({
+      success: true,
+      user: userData,
+      stats: {
+        questionsAsked: _count.campusTalks,
+        answersGiven: _count.campusTalkResponses,
+      },
+    })
   } catch (error) {
-    console.error('❌ Fetch user error:', error)
+    console.error('Fetch user error:', error)
     return Response.json(
       { error: 'Failed to fetch user', details: String(error) },
       { status: 500 }
