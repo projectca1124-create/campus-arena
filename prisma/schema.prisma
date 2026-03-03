@@ -26,6 +26,7 @@ model User {
   minor              String?
   academicStanding   String?
   interests          String?
+  pinnedGroupId      String?
   onboardingComplete Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -57,6 +58,8 @@ model Group {
   icon        String?
   type        String   @default("custom")
   isDefault   Boolean  @default(false)
+  visibility  String   @default("public")
+  inviteCode  String?  @unique
   university  String?
   identifier  String?
   degree      String?
@@ -70,6 +73,7 @@ model Group {
   @@index([university])
   @@index([isDefault])
   @@index([identifier])
+  @@index([inviteCode])
 }
 
 model GroupMember {

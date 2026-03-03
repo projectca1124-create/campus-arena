@@ -161,7 +161,7 @@ export default function CampusTalksPage() {
 
   const openDiscussion = async (talk: CampusTalk) => {
     setSelectedTalk(talk); setIsLoadingResponses(true); setCardMenuId(null)
-    try { const res = await fetch(`/api/campus-talks/${talk.id}/responses`); if (res.ok) { const data = await res.json(); setResponses(data.responses || []) } }
+    try { const res = await fetch(`/api/campus-talks/${talk.id}/responses`); if (res.ok) { const data = await res.json(); setResponses((data.responses || []) .reverse()) } }
     catch (err) { console.error('Error:', err) }
     finally { setIsLoadingResponses(false) }
   }
@@ -171,7 +171,7 @@ export default function CampusTalksPage() {
     try {
       const res = await fetch(`/api/campus-talks/${selectedTalk.id}/responses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newResponse, userId: user.id }) })
       if (res.ok) {
-        const data = await res.json(); setResponses(prev => [...prev, data.response]); setNewResponse('')
+        const data = await res.json(); setResponses(prev => [data.response, ...prev]); setNewResponse('')
         setTalks(prev => prev.map(t => t.id === selectedTalk.id ? { ...t, responseCount: t.responseCount + 1 } : t))
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
         setTimeout(() => responseEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)

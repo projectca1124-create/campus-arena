@@ -95,7 +95,7 @@ export async function POST(request: Request) {
           description: `${finalDegree} students in ${major} — ${semester} ${year}`,
           identifier: groupIdentifier,
           type: 'degree-major',
-          isDefault: false,
+          isDefault: true,
           university,
           degree: finalDegree,
           major,

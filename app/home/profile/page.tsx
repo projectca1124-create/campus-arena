@@ -386,8 +386,8 @@ export default function ProfilePage() {
                   <h2 className="text-2xl font-bold text-gray-900">{user?.firstName} {user?.lastName}</h2>
                   <p className="text-sm text-gray-500 mt-0.5">{user?.email}</p>
                   <div className="flex items-center gap-4 mt-3 text-sm text-gray-600 flex-wrap">
-                    {user?.major && <span className="flex items-center gap-1.5"><span className="text-gray-400">🎓</span> {user.major}</span>}
-                    {user?.semester && user?.year && <span className="flex items-center gap-1.5"><span className="text-gray-400">📋</span> {user.semester} {user.year}</span>}
+                    {user?.degree && <span className="flex items-center gap-1.5"><span className="text-gray-400">🎓</span> {user.degree}</span>}
+                    {user?.major && <span className="flex items-center gap-1.5"><span className="text-gray-400">📚</span> {user.major}</span>}
                     {user?.academicStanding && <span className="flex items-center gap-1.5"><span className="text-gray-400">📊</span> {user.academicStanding}</span>}
                     {user?.hometown && <span className="flex items-center gap-1.5"><span className="text-gray-400">📍</span> {user.hometown}</span>}
                   </div>
