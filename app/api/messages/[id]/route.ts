@@ -53,10 +53,12 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
 }
 
 // PATCH (edit) a message
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  try {
+// FIXED for Next.js 16:
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+    try {
     const { content, userId } = await request.json()
-    const messageId = params.id
+    const messageId = id
 
     if (!content?.trim()) return Response.json({ error: 'Content required' }, { status: 400 })
 
