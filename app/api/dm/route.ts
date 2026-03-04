@@ -1,6 +1,9 @@
-// Save as: app/api/dm/route.ts (replace existing)
+// app/api/dm/route.ts — SECURED VERSION
+// Key change: Uses getAuthUser() instead of trusting userId from request body/params
+
 import { PrismaClient } from '@prisma/client'
 import pusherServer from '@/lib/pusher-server'
+import { getAuthUser } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
@@ -20,12 +23,15 @@ const DM_SELECT = {
 
 export async function GET(request: Request) {
   try {
+    // ── NEW: Verify session instead of trusting query param ──
+    const auth = await getAuthUser()
+    if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userId = auth.userId  // ← Trusted, from JWT
+
     const { searchParams } = new URL(request.url)
-    const userId = searchParams.get('userId')
     const otherUserId = searchParams.get('otherUserId')
     const after = searchParams.get('after')
-
-    if (!userId) return Response.json({ error: 'userId required' }, { status: 400 })
 
     // If otherUserId, return messages between two users
     if (otherUserId) {
@@ -51,7 +57,6 @@ export async function GET(request: Request) {
           data: { read: true },
         })
 
-        // ── Pusher: notify sender that their messages were read ──
         if (updated.count > 0) {
           const channel = getDMChannel(userId, otherUserId)
           await pusherServer.trigger(channel, 'messages-read', {
@@ -103,16 +108,22 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { content, senderId, receiverId, fileUrl, fileName, fileType, imageUrl, replyToId } = body
+    // ── NEW: Verify session — senderId comes from JWT, not body ──
+    const auth = await getAuthUser()
+    if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    if (!senderId || !receiverId) return Response.json({ error: 'Missing fields' }, { status: 400 })
+    const body = await request.json()
+    const { content, receiverId, fileUrl, fileName, fileType, imageUrl, replyToId } = body
+
+    const senderId = auth.userId  // ← Trusted, from JWT (ignore body.senderId)
+
+    if (!receiverId) return Response.json({ error: 'receiverId required' }, { status: 400 })
     if (!content?.trim() && !fileUrl && !imageUrl) return Response.json({ error: 'Content required' }, { status: 400 })
 
     const message = await prisma.directMessage.create({
       data: {
         content: content || '',
-        senderId,
+        senderId,        // ← From JWT, not from request body
         receiverId,
         fileUrl: fileUrl || null,
         fileName: fileName || null,
@@ -122,14 +133,13 @@ export async function POST(request: Request) {
       select: DM_SELECT,
     })
 
-    // ── Pusher: broadcast new DM to the DM channel ──
+    // Pusher: broadcast new DM
     const channel = getDMChannel(senderId, receiverId)
     await pusherServer.trigger(channel, 'new-message', {
       message,
     }).catch(err => console.error('Pusher DM trigger error:', err))
 
-    // ── Pusher: notify receiver about new conversation update ──
-    // This updates the conversation list sidebar for the other user
+    // Pusher: notify receiver
     await pusherServer.trigger(`user-${receiverId}`, 'new-dm-notification', {
       from: {
         id: message.sender.id,

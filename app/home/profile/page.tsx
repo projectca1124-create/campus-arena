@@ -342,25 +342,29 @@ export default function ProfilePage() {
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto p-6">
 
-            {/* ONBOARDING BANNER */}
+            {/* ONBOARDING BANNER — FIXED LAYOUT */}
             {onboardingMode && (
               <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-6 mb-6 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-start gap-6">
+                  {/* Text content — takes remaining space */}
+                  <div className="flex-1 min-w-0 pt-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <Sparkles className="w-6 h-6" />
+                      <Sparkles className="w-6 h-6 flex-shrink-0" />
                       <h2 className="text-xl font-bold">Let&apos;s get a few details to personalize your experience</h2>
                     </div>
                     <p className="text-indigo-100 text-sm ml-9">Fill in the required fields below, then you&apos;re all set!</p>
                   </div>
-                  <div className="relative flex-shrink-0 ml-6">
-                    <UserAvatar src={user?.profileImage} firstName={user?.firstName || '?'} lastName="" size={80} className="border-4 border-white/30" />
-                    <button onClick={() => fileInputRef.current?.click()}
-                      className="absolute bottom-0 right-0 w-8 h-8 bg-white text-indigo-600 rounded-full flex items-center justify-center shadow-md hover:bg-gray-100 transition-all border-2 border-indigo-400">
-                      <Camera className="w-4 h-4" />
-                    </button>
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                    <p className="text-[10px] text-indigo-200 text-center mt-1">Add photo</p>
+                  {/* Avatar — fixed width, won't overlap */}
+                  <div className="flex flex-col items-center flex-shrink-0" style={{ width: 96 }}>
+                    <div className="relative">
+                      <UserAvatar src={user?.profileImage} firstName={user?.firstName || '?'} lastName="" size={80} className="border-4 border-white/30" />
+                      <button onClick={() => fileInputRef.current?.click()}
+                        className="absolute -bottom-1 -right-1 w-8 h-8 bg-white text-indigo-600 rounded-full flex items-center justify-center shadow-md hover:bg-gray-100 transition-all border-2 border-indigo-400">
+                        <Camera className="w-4 h-4" />
+                      </button>
+                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                    </div>
+                    <p className="text-[11px] text-indigo-200 text-center mt-2">Add photo</p>
                   </div>
                 </div>
               </div>

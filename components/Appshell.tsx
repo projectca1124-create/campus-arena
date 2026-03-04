@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { MessageSquare, Megaphone, LogOut } from 'lucide-react'
+import { MessageSquare, Megaphone, LogOut, Lock } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 
 // ─── Shared User type ──────────────────────────────────────────
@@ -16,6 +16,7 @@ interface ShellUser {
   semester?: string
   year?: string
   profileImage?: string
+  onboardingComplete?: boolean
 }
 
 // ─── Avatar (local to shell) ───────────────────────────────────
@@ -33,14 +34,24 @@ function ShellAvatar({ src, firstName, lastName, size = 36, className = '' }: {
 }
 
 // ─── Nav Item ──────────────────────────────────────────────────
-function NavItem({ icon, label, active, onClick }: {
-  icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void
+function NavItem({ icon, label, active, onClick, locked }: {
+  icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; locked?: boolean
 }) {
   return (
-    <button onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${active ? 'bg-indigo-50 text-indigo-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+    <button
+      onClick={locked ? undefined : onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${
+        locked
+          ? 'text-gray-300 cursor-not-allowed'
+          : active
+            ? 'bg-indigo-50 text-indigo-600'
+            : 'text-gray-600 hover:bg-gray-50'
+      }`}
+      disabled={locked}
+    >
       <span className="flex items-center justify-center w-5 h-5">{icon}</span>
       <span>{label}</span>
+      {locked && <Lock className="w-3.5 h-3.5 ml-auto text-gray-300" />}
     </button>
   )
 }
@@ -48,15 +59,12 @@ function NavItem({ icon, label, active, onClick }: {
 // ─── AppShell Props ────────────────────────────────────────────
 interface AppShellProps {
   children: React.ReactNode
-  /** Page title shown in top bar. If not provided, auto-detects from pathname */
   title?: string
-  /** Whether to show the top bar. Defaults to true. Set false if page manages its own header. */
   showTopBar?: boolean
 }
 
 // ═══════════════════════════════════════════════════════════════
 // AppShell — shared layout for all /home/* pages
-// Provides: sidebar, top bar, logout modal, user context
 // ═══════════════════════════════════════════════════════════════
 export default function AppShell({ children, title, showTopBar = true }: AppShellProps) {
   const router = useRouter()
@@ -84,7 +92,6 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
       } catch {}
     }
     window.addEventListener('storage', handleStorageChange)
-    // Also listen for custom event for same-tab updates
     window.addEventListener('userUpdated', handleStorageChange)
     return () => {
       window.removeEventListener('storage', handleStorageChange)
@@ -102,6 +109,10 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
   const isCampusTalks = pathname?.startsWith('/home/campus-talks')
   const isProfile = pathname?.startsWith('/home/profile')
   const isExplore = pathname?.startsWith('/home/explore')
+
+  // ── Onboarding lock detection ──
+  const isOnboarding = !user?.onboardingComplete
+  const isOnProfilePage = isProfile
 
   const autoTitle = isCampusTalks ? 'Campus Talks'
     : isProfile ? 'Profile'
@@ -130,16 +141,26 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
           <NavItem
             icon={<MessageSquare className="w-[18px] h-[18px]" />}
             label="Chat"
-            active={isChat}
+            active={isChat && !isOnboarding}
             onClick={() => router.push('/home')}
+            locked={isOnboarding}
           />
           <NavItem
             icon={<Megaphone className="w-[18px] h-[18px]" />}
             label="Campus Talks"
-            active={isCampusTalks}
+            active={isCampusTalks && !isOnboarding}
             onClick={() => router.push('/home/campus-talks')}
+            locked={isOnboarding}
           />
         </nav>
+
+        {/* Onboarding hint in sidebar */}
+        {isOnboarding && (
+          <div className="mx-3 mb-3 px-3 py-3 rounded-xl bg-indigo-50 border border-indigo-100">
+            <p className="text-xs text-indigo-600 font-semibold mb-1">Complete your profile</p>
+            <p className="text-[11px] text-indigo-400 leading-relaxed">Fill in your details to unlock Chat and Campus Talks</p>
+          </div>
+        )}
 
         {/* Logout */}
         <div className="px-3 py-4" style={{ borderTop: '1px solid #e5e7eb' }}>
@@ -161,8 +182,8 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
             <h1 className="text-[15px] font-semibold text-gray-900">{displayTitle}</h1>
             {user && (
               <div className="flex items-center gap-3">
-                <NotificationBell userId={user.id} />
-                <button onClick={() => router.push('/home/profile')}>
+                {!isOnboarding && <NotificationBell userId={user.id} />}
+                <button onClick={() => router.push('/home/profile')} disabled={isOnboarding && isOnProfilePage}>
                   <ShellAvatar
                     src={user.profileImage}
                     firstName={user.firstName}
@@ -190,7 +211,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
             style={{ background: 'white', border: '1px solid #e5e7eb' }}
             onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-2">Leaving Campus Arena?</h2>
-            <p className="text-sm text-gray-500 mb-6">You're about to log out. Are you sure?</p>
+            <p className="text-sm text-gray-500 mb-6">You&apos;re about to log out. Are you sure?</p>
             <div className="flex gap-3">
               <button onClick={() => setShowLogoutModal(false)}
                 className="flex-1 px-4 py-2.5 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50"
