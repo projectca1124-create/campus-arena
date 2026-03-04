@@ -204,11 +204,13 @@ export default function HomePage() {
   const selectedDMRef = useRef<DMConversation | null>(null)
   const messagesRef = useRef<Message[]>([])
   const dmMessagesRef = useRef<DMMessage[]>([])
+  const mutedChatsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => { selectedChatRef.current = selectedChat }, [selectedChat])
   useEffect(() => { selectedDMRef.current = selectedDM }, [selectedDM])
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { dmMessagesRef.current = dmMessages }, [dmMessages])
+  useEffect(() => { mutedChatsRef.current = mutedChats }, [mutedChats])
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior })
@@ -352,7 +354,55 @@ export default function HomePage() {
     loadData()
   }, [router])
 
-  // ─── Pusher Real-time Subscriptions ───
+  // ─── Pusher: PERSISTENT user channel (always active, never unsubscribes on chat switch) ───
+  useEffect(() => {
+    if (!user) return
+    const pusher = getPusherClient()
+    const userChannel = `user-${user.id}`
+    const uch = pusher.subscribe(userChannel)
+
+    uch.bind('new-dm-notification', (data: { from: any; preview: string; timestamp: string }) => {
+      const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
+      const dmChatId = `dm_${data.from.id}`
+      if (!isCurrentDM && !mutedChatsRef.current.has(dmChatId)) playReceiveSound()
+      setDmConversations(prev => {
+        const idx = prev.findIndex(c => c.user.id === data.from.id)
+        if (idx >= 0) {
+          const updated = [...prev]
+          const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
+          updated[idx] = { ...updated[idx], lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: isCurrentDM ? 0 : updated[idx].unreadCount + 1 }
+          return updated.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+        }
+        return [{ user: data.from, lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: 1 }, ...prev]
+      })
+    })
+
+    uch.bind('new-group-notification', (data: { groupId: string; groupName: string; from: any; preview: string; messageId: string; timestamp: string }) => {
+      const isCurrentGroup = selectedChatRef.current?.id === data.groupId
+      const groupChatId = `group_${data.groupId}`
+      if (!isCurrentGroup && !mutedChatsRef.current.has(groupChatId)) playReceiveSound()
+
+      setGroups(prev => prev.map(g => {
+        if (g.id !== data.groupId) return g
+        const newMsg = {
+          id: data.messageId,
+          content: data.preview,
+          groupId: data.groupId,
+          userId: data.from.id,
+          user: data.from,
+          reactions: [],
+          createdAt: data.timestamp,
+        }
+        return { ...g, messages: [...(g.messages || []), newMsg] }
+      }))
+    })
+
+    return () => {
+      pusher.unsubscribe(userChannel)
+    }
+  }, [user?.id]) // ← ONLY depends on user.id — never re-runs on chat switch
+
+  // ─── Pusher: Chat-specific channels (changes with selected chat) ───
   useEffect(() => {
     if (!user) return
     const pusher = getPusherClient()
@@ -453,26 +503,6 @@ export default function HomePage() {
         })
       })
     }
-
-    const userChannel = `user-${user.id}`
-    const uch = pusher.subscribe(userChannel)
-    subscriptions.push(userChannel)
-
-    uch.bind('new-dm-notification', (data: { from: any; preview: string; timestamp: string }) => {
-      const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
-      const dmChatId = `dm_${data.from.id}`
-      if (!isCurrentDM && !mutedChats.has(dmChatId)) playReceiveSound()
-      setDmConversations(prev => {
-        const idx = prev.findIndex(c => c.user.id === data.from.id)
-        if (idx >= 0) {
-          const updated = [...prev]
-          const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
-          updated[idx] = { ...updated[idx], lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: isCurrentDM ? 0 : updated[idx].unreadCount + 1 }
-          return updated.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
-        }
-        return [{ user: data.from, lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: 1 }, ...prev]
-      })
-    })
 
     return () => {
       setTypingUsers({})
@@ -814,7 +844,7 @@ export default function HomePage() {
                 {renderReplyPreview(msg.replyTo, isOwn)}
                 {editingMessage?.id === msg.id ? (
                   <div className="flex flex-col gap-1.5">
-                    <input type="text" value={editingMessage?.content || ''} onChange={e => setEditingMessage(prev => prev ? { ...prev, content: e.target.value } : prev)}
+                    <input type="text" value={editingMessage?.content || ''} onChange={e => { const val = e.target.value; setEditingMessage(prev => prev ? { ...prev, content: val } : prev) }}
                       onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingMessage(null) }}
                       autoFocus className={`w-full px-2 py-1 text-sm rounded-lg outline-none ${isOwn ? 'bg-white/20 text-white placeholder-white/50' : 'bg-gray-50 text-gray-900'}`} />
                     <div className="flex gap-2 justify-end text-[11px]"><button onClick={() => setEditingMessage(null)} className="opacity-70 hover:opacity-100">Cancel</button><button onClick={handleSaveEdit} className="font-bold opacity-70 hover:opacity-100">Save ↵</button></div>

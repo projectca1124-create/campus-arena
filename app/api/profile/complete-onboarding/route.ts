@@ -79,30 +79,31 @@ export async function POST(request: Request) {
   
 
    // Smart abbreviation: 1 word = full, 2 words = initials, 3+ words = initials
+    // 2. Major group — one group per major per university (no semester/year)
     const majorWords = major.trim().split(/\s+/)
-    const majorShort = majorWords.length === 1 ? majorWords[0] : majorWords.map((w: string) => w[0].toUpperCase()).join('')
-    const semShort = semester.charAt(0).toUpperCase() + semester.slice(1).toLowerCase()
-    const groupName = `${majorShort} ${semShort} ${year}`
-    const groupIdentifier = `${finalDegree.toLowerCase()}-${majorShort.toLowerCase()}-${semShort.toLowerCase()}-${year}`
+    const majorShort = majorWords.length === 1
+      ? majorWords[0]
+      : majorWords.map((w: string) => w[0].toUpperCase()).join('')
+    const groupName = majorShort
+    const groupIdentifier = `major-${majorShort.toLowerCase()}-${university.toLowerCase().replace(/\s+/g, '-')}`
+
     let majorGroup = await prisma.group.findFirst({
-      where: { identifier: groupIdentifier, university },
+      where: { identifier: groupIdentifier },
     })
 
     if (!majorGroup) {
-     majorGroup = await prisma.group.create({
+      majorGroup = await prisma.group.create({
         data: {
           name: groupName,
-          description: `${finalDegree} students in ${major} — ${semester} ${year}`,
+          description: `All ${major} students`,
           identifier: groupIdentifier,
-          type: 'degree-major',
+          type: 'major',
           isDefault: true,
           university,
-          degree: finalDegree,
           major,
           icon: '🎓',
         },
       })
-      console.log(`✨ Created major group: ${majorGroup.name}`)
     }
 
     // Add user to major group
