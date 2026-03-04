@@ -11,10 +11,11 @@ function getDMChannel(id1: string, id2: string) {
 }
 
 // DELETE a message
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  try {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+    try {
     const { userId } = await request.json()
-    const messageId = params.id
+    const messageId = id
 
     // Try group message first
     const groupMsg = await prisma.message.findUnique({ where: { id: messageId }, select: { userId: true, groupId: true } })
