@@ -339,7 +339,7 @@ export default function Home() {
                 <div key={i} style={{ width:"28px", height:"28px", borderRadius:"50%", background:c, border:"2px solid #FDFBF7", marginLeft:i?"-8px":"0", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"11px", color:"white", fontWeight:700, fontFamily:"var(--heading)", zIndex:5-i }}>{["S","J","M","A","R"][i]}</div>
               ))}
             </div>
-            <p style={{ fontSize:"13px", color:"#888" }}>Students from <span style={{ color:"#6366f1", fontWeight:600 }}>5+ universities</span> Students from 5+ universities have joined Campus Arena as their official campus space"</p>
+            <p style={{ fontSize:"13px", color:"#888" }}>Students from <span style={{ color:"#6366f1", fontWeight:600 }}>5+ universities</span> have joined Campus Arena as their official campus space.</p>
           </div>
         </div>
 
