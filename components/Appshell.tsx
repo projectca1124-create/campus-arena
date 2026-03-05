@@ -5,7 +5,6 @@ import { useRouter, usePathname } from 'next/navigation'
 import { MessageSquare, Megaphone, LogOut, Lock } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 
-// ─── Shared User type ──────────────────────────────────────────
 interface ShellUser {
   id: string
   email: string
@@ -19,7 +18,6 @@ interface ShellUser {
   onboardingComplete?: boolean
 }
 
-// ─── Avatar (local to shell) ───────────────────────────────────
 function ShellAvatar({ src, firstName, lastName, size = 36, className = '' }: {
   src?: string | null; firstName?: string; lastName?: string; size?: number; className?: string
 }) {
@@ -33,7 +31,6 @@ function ShellAvatar({ src, firstName, lastName, size = 36, className = '' }: {
   )
 }
 
-// ─── Nav Item ──────────────────────────────────────────────────
 function NavItem({ icon, label, active, onClick, locked }: {
   icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; locked?: boolean
 }) {
@@ -56,23 +53,18 @@ function NavItem({ icon, label, active, onClick, locked }: {
   )
 }
 
-// ─── AppShell Props ────────────────────────────────────────────
 interface AppShellProps {
   children: React.ReactNode
   title?: string
   showTopBar?: boolean
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AppShell — shared layout for all /home/* pages
-// ═══════════════════════════════════════════════════════════════
 export default function AppShell({ children, title, showTopBar = true }: AppShellProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [user, setUser] = useState<ShellUser | null>(null)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
 
-  // Load user from localStorage
   useEffect(() => {
     try {
       const userStr = localStorage.getItem('user')
@@ -83,7 +75,6 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
     }
   }, [router])
 
-  // Listen for user updates (e.g., profile edits)
   useEffect(() => {
     const handleStorageChange = () => {
       try {
@@ -104,13 +95,11 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
     router.push('/auth')
   }
 
-  // Auto-detect active nav and page title from pathname
   const isChat = pathname === '/home' || pathname === '/home/'
   const isCampusTalks = pathname?.startsWith('/home/campus-talks')
   const isProfile = pathname?.startsWith('/home/profile')
   const isExplore = pathname?.startsWith('/home/explore')
 
-  // ── Onboarding lock detection ──
   const isOnboarding = !user?.onboardingComplete
   const isOnProfilePage = isProfile
 
@@ -126,13 +115,21 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
 
       {/* ═══ LEFT SIDEBAR ═══ */}
       <aside className="w-[220px] flex flex-col flex-shrink-0 border-r" style={{ background: 'white', borderColor: '#e5e7eb' }}>
-        {/* Logo */}
+
+        {/* Logo + University */}
         <div className="px-5 py-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center">
+            <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-xs">CA</span>
             </div>
-            <span className="font-bold text-[15px] text-gray-900 tracking-tight">Campus Arena</span>
+            <div className="min-w-0">
+              <span className="font-bold text-[15px] text-gray-900 tracking-tight block leading-tight">Campus Arena</span>
+              {user?.university && (
+                <span className="text-[11px] text-indigo-500 font-semibold truncate block leading-tight mt-0.5">
+                  {user.university.split('.')[0].toUpperCase()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -154,7 +151,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
           />
         </nav>
 
-        {/* Onboarding hint in sidebar */}
+        {/* Onboarding hint */}
         {isOnboarding && (
           <div className="mx-3 mb-3 px-3 py-3 rounded-xl bg-indigo-50 border border-indigo-100">
             <p className="text-xs text-indigo-600 font-semibold mb-1">Complete your profile</p>
@@ -175,7 +172,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
       {/* ═══ MAIN AREA ═══ */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* ─── Top Bar ─── */}
+        {/* Top Bar */}
         {showTopBar && (
           <div className="h-[56px] border-b px-6 flex items-center justify-between flex-shrink-0"
             style={{ background: 'white', borderColor: '#e5e7eb' }}>
@@ -197,7 +194,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
           </div>
         )}
 
-        {/* ─── Page Content ─── */}
+        {/* Page Content */}
         <div className="flex-1 overflow-y-auto">
           {children}
         </div>

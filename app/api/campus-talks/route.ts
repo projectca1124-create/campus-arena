@@ -11,13 +11,12 @@ export async function GET(request: Request) {
     const userId = searchParams.get('userId')
     const search = searchParams.get('search') || ''
     const category = searchParams.get('category') || ''
-    const tab = searchParams.get('tab') || 'all' // 'all' | 'unanswered' | 'my'
+    const tab = searchParams.get('tab') || 'all'
 
     if (!userId) {
       return Response.json({ error: 'userId is required' }, { status: 400 })
     }
 
-    // Get user's university
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { university: true },
@@ -27,10 +26,7 @@ export async function GET(request: Request) {
       return Response.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Build where clause
-    const where: any = {
-      university: user.university,
-    }
+    const where: any = { university: user.university }
 
     if (search) {
       where.OR = [
@@ -39,26 +35,16 @@ export async function GET(request: Request) {
       ]
     }
 
-    if (category) {
-      where.category = category
-    }
-
-    if (tab === 'my') {
-      where.userId = userId
-    }
+    if (category) where.category = category
+    if (tab === 'my') where.userId = userId
 
     const talks = await prisma.campusTalk.findMany({
       where,
       include: {
         user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            profileImage: true,
-          },
+          select: { id: true, firstName: true, lastName: true, profileImage: true },
         },
-       responses: {
+        responses: {
           select: { id: true, userId: true },
         },
       },
@@ -66,20 +52,16 @@ export async function GET(request: Request) {
     })
 
     // Filter based on tab
-   // Filter based on tab
     let filteredTalks = talks
     if (tab === 'all') {
-      filteredTalks = talks.filter((t) => t.responses.length > 0)
+      filteredTalks = talks.filter(t => t.responses.length > 0)
     } else if (tab === 'unanswered') {
-      filteredTalks = talks.filter((t) => t.responses.length === 0)
+      filteredTalks = talks.filter(t => t.responses.length === 0)
     } else if (tab === 'answered') {
-      // Show only discussions where this user has given a response
-      filteredTalks = talks.filter((t) => t.responses.some((r: any) => r.userId === userId))
+      filteredTalks = talks.filter(t => t.responses.some((r: any) => r.userId === userId))
     }
-    // 'my' tab shows all of user's questions regardless of responses
 
-    // Map to add response count
-    const result = filteredTalks.map((t) => ({
+    const result = filteredTalks.map(t => ({
       id: t.id,
       title: t.title,
       content: t.content,
@@ -91,17 +73,25 @@ export async function GET(request: Request) {
       responseCount: t.responses.length,
     }))
 
-    // Get available categories
     const allTalks = await prisma.campusTalk.findMany({
       where: { university: user.university },
       select: { category: true },
     })
-    const categories = [...new Set(allTalks.map((t) => t.category).filter(Boolean))]
+    const categories = [...new Set(allTalks.map(t => t.category).filter(Boolean))]
+
+    // ── Unanswered count (always fresh, unaffected by search/category/tab filters) ──
+    const unansweredCount = await prisma.campusTalk.count({
+      where: {
+        university: user.university,
+        responses: { none: {} },
+      },
+    })
 
     return Response.json({
       success: true,
       talks: result,
       categories,
+      unansweredCount,
     })
   } catch (error) {
     console.error('❌ Campus Talks GET error:', error)
@@ -118,10 +108,7 @@ export async function POST(request: Request) {
     const { title, content, category, userId } = await request.json()
 
     if (!title || !userId) {
-      return Response.json(
-        { error: 'title and userId are required' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'title and userId are required' }, { status: 400 })
     }
 
     const user = await prisma.user.findUnique({
@@ -143,12 +130,7 @@ export async function POST(request: Request) {
       },
       include: {
         user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            profileImage: true,
-          },
+          select: { id: true, firstName: true, lastName: true, profileImage: true },
         },
       },
     })

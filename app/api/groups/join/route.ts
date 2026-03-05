@@ -1,4 +1,6 @@
+// app/api/groups/join/route.ts
 import { PrismaClient } from '@prisma/client'
+import { publishEvent } from '@/lib/ably-server'
 
 const prisma = new PrismaClient()
 
@@ -42,12 +44,70 @@ export async function POST(request: Request) {
       return Response.json({ success: true, group, alreadyMember: true })
     }
 
-    // Add user to group
+    // ── PRIVATE GROUP → pending approval flow ──────────────────────
+    if (group.visibility === 'private') {
+      // Check if already has a pending request
+      const existingRequest = await prisma.groupJoinRequest.findUnique({
+        where: { userId_groupId: { userId, groupId: group.id } },
+      })
+      if (existingRequest) {
+        return Response.json({
+          success: true,
+          pending: true,
+          alreadyMember: false,
+          message: 'You already have a pending request for this group.',
+        })
+      }
+
+      // Create join request
+      await prisma.groupJoinRequest.create({
+        data: { userId, groupId: group.id, status: 'pending' },
+      })
+
+      // Find group admins and notify each one
+      const admins = group.members.filter(m => m.role === 'admin')
+      const requesterName = `${user.firstName} ${user.lastName}`
+
+      await Promise.all(admins.map(async (admin) => {
+        // DB notification
+        const notification = await prisma.notification.create({
+          data: {
+            userId: admin.userId,
+            type: 'group_join_request',
+            title: '👥 Join Request',
+            body: `${requesterName} wants to join "${group.name}"`,
+            link: `/home?groupId=${group.id}&approveUser=${userId}`,
+            read: false,
+          },
+        })
+        // Real-time push to admin
+        await publishEvent(`user-${admin.userId}`, 'new-notification', {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          body: notification.body,
+          link: notification.link,
+          read: false,
+          createdAt: notification.createdAt.toISOString(),
+          meta: { groupId: group.id, requesterId: userId, requesterName },
+        }).catch(() => {})
+      }))
+
+      console.log(`⏳ Join request created: user ${userId} → group ${group.id}`)
+      return Response.json({
+        success: true,
+        pending: true,
+        alreadyMember: false,
+        groupName: group.name,
+        message: `Your request to join "${group.name}" has been sent. You'll be notified when an admin approves it.`,
+      })
+    }
+
+    // ── PUBLIC GROUP → instant join ─────────────────────────────────
     await prisma.groupMember.create({
       data: { userId, groupId: group.id, role: 'member' },
     })
 
-    // Refetch with updated members
     const updatedGroup = await prisma.group.findUnique({
       where: { id: group.id },
       include: {
@@ -65,9 +125,9 @@ export async function POST(request: Request) {
       },
     })
 
-    console.log(`✅ User ${userId} joined group ${group.id} via invite code`)
-
+    console.log(`✅ User ${userId} joined public group ${group.id}`)
     return Response.json({ success: true, group: updatedGroup, alreadyMember: false })
+
   } catch (error) {
     console.error('❌ Join group error:', error)
     return Response.json({ error: 'Failed to join group', details: String(error) }, { status: 500 })

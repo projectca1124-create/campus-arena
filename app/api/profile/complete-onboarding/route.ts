@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const {
       userId, firstName, lastName, degree, customDegree, major, minor,
-      year, semester, academicStanding, bio, interests,
+      year, semester, academicStanding, bio, hometown, interests,
     } = await request.json()
 
     // Validation
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
         semester,
         academicStanding: academicStanding || null,
         bio: bio || null,
+        hometown: hometown || null,
         interests: interests.join(','),
         funFact: interests.join(', '), // backward compat
         onboardingComplete: true,
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
     const university = user.university || ''
     const uniShort = university.split('.')[0]?.toUpperCase() || 'UNI'
 
-    // 1. University Arena group (e.g., "UTA Arena" or "ASU Arena")
+    // 1. University Arena group (e.g., "UTA Arena")
     const uniGroupId = `${uniShort.toLowerCase()}-arena`
     let uniGroup = await prisma.group.findFirst({
       where: { identifier: uniGroupId },
@@ -75,17 +76,10 @@ export async function POST(request: Request) {
       create: { userId, groupId: uniGroup.id, role: 'member' },
     })
 
-    // 2. Degree + Major + Semester + Year group
-  
-
-   // Smart abbreviation: 1 word = full, 2 words = initials, 3+ words = initials
-    // 2. Major group — one group per major per university (no semester/year)
-    const majorWords = major.trim().split(/\s+/)
-    const majorShort = majorWords.length === 1
-      ? majorWords[0]
-      : majorWords.map((w: string) => w[0].toUpperCase()).join('')
-    const groupName = majorShort
-    const groupIdentifier = `major-${majorShort.toLowerCase()}-${university.toLowerCase().replace(/\s+/g, '-')}`
+    // 2. Major group — full major name, one group per major per university
+    // e.g. "Computer Science", "Biology", "Applied Statistics and Data Science"
+    const groupName = major.trim()  // ← Full major name, no abbreviation
+    const groupIdentifier = `major-${major.trim().toLowerCase().replace(/\s+/g, '-')}-${university.toLowerCase().replace(/\s+/g, '-')}`
 
     let majorGroup = await prisma.group.findFirst({
       where: { identifier: groupIdentifier },
@@ -104,6 +98,7 @@ export async function POST(request: Request) {
           icon: '🎓',
         },
       })
+      console.log(`✨ Created major group: ${majorGroup.name}`)
     }
 
     // Add user to major group
@@ -130,6 +125,7 @@ export async function POST(request: Request) {
         university: user.university,
         academicStanding: user.academicStanding,
         bio: user.bio,
+        hometown: user.hometown,
         interests: user.interests,
         profileImage: user.profileImage,
         onboardingComplete: user.onboardingComplete,

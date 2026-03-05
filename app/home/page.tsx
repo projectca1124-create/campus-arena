@@ -6,7 +6,8 @@ import NotificationBell from '@/components/NotificationBell'
 import ProfileViewModal from '@/components/ProfileViewModal'
 import EmojiKeyboard from '@/components/EmojiKeyboard'
 import GifPicker from '@/components/GifPicker'
-import { getPusherClient, getDMChannelName, getGroupChannelName } from '@/lib/pusher-client'
+import { getAblyClient, getDMChannelName, getGroupChannelName } from '@/lib/ably-client'
+import type * as Ably from 'ably'
 import { playSendSound, playReceiveSound, initSounds } from '@/lib/sounds'
 import {
   Search, Plus, AlertCircle, Loader2, LogOut, Users, Send,
@@ -15,6 +16,7 @@ import {
   BellOff, BellRing, VolumeX, Reply, Sticker, ChevronDown,
   Forward, Pencil, Trash2, Copy, Check, CheckCheck,
   Pin, PinOff, Link2, Share2, Lock, Globe, Shield, UserPlus,
+  Menu, ChevronLeft,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -151,16 +153,12 @@ export default function HomePage() {
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const [sidebarMenuId, setSidebarMenuId] = useState<string | null>(null)
 
-  // Reply state
   const [replyingTo, setReplyingTo] = useState<{ id: string; content: string; userName: string; imageUrl?: string } | null>(null)
-
-  // Message actions state
   const [messageActionId, setMessageActionId] = useState<string | null>(null)
   const [editingMessage, setEditingMessage] = useState<{ id: string; content: string } | null>(null)
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null)
   const [forwardingMessage, setForwardingMessage] = useState<{ content: string; imageUrl?: string } | null>(null)
 
-  // ─── Pin / Share / Join state ───
   const [pinnedGroupId, setPinnedGroupId] = useState<string | null>(null)
   const [shareGroupViaDM, setShareGroupViaDM] = useState<Group | null>(null)
   const [copiedInviteLink, setCopiedInviteLink] = useState(false)
@@ -170,14 +168,32 @@ export default function HomePage() {
   const [joinError, setJoinError] = useState('')
   const [isJoining, setIsJoining] = useState(false)
 
-  // ─── Real-time: Typing, Presence, Read Receipts ───
   const [typingUsers, setTypingUsers] = useState<Record<string, { name: string; timeout: NodeJS.Timeout }>>({})
+
+  // ── Mobile responsive state ──────────────────────────────────────
+  const [isMobile, setIsMobile] = useState(false)
+  // mobile view: 'nav' | 'list' | 'chat'
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  // ── Mobile detection ──────────────────────────────────────────────
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (!mobile) setMobileNavOpen(false)
+      if (mobile) setMobileView(v => v === 'chat' ? 'chat' : 'list')
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
   const [dmReadStatus, setDmReadStatus] = useState<boolean>(false)
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastTypingSentRef = useRef<number>(0)
 
-  // Group unread tracking (localStorage-based)
   const [groupLastRead, setGroupLastRead] = useState<Record<string, string>>({})
   useEffect(() => {
     try { const stored = localStorage.getItem('groupLastRead'); if (stored) setGroupLastRead(JSON.parse(stored)) } catch {}
@@ -196,10 +212,8 @@ export default function HomePage() {
     return group.messages?.filter(m => m.userId !== user.id && new Date(m.createdAt) > new Date(lastRead)).length || 0
   }
 
-  // Scroll state
   const [showScrollDown, setShowScrollDown] = useState(false)
 
-  // Polling refs
   const selectedChatRef = useRef<Group | null>(null)
   const selectedDMRef = useRef<DMConversation | null>(null)
   const messagesRef = useRef<Message[]>([])
@@ -224,7 +238,6 @@ export default function HomePage() {
     setShowScrollDown(fromBottom > 200)
   }, [])
 
-  // Load muted chats
   useEffect(() => {
     try { const stored = localStorage.getItem('mutedChats'); if (stored) setMutedChats(new Set(JSON.parse(stored))) } catch {}
   }, [])
@@ -238,7 +251,6 @@ export default function HomePage() {
   const getCurrentChatId = () => { if (selectedChat) return `group_${selectedChat.id}`; if (selectedDM) return `dm_${selectedDM.user.id}`; return '' }
   const isMuted = (chatId: string) => mutedChats.has(chatId)
 
-  // Close menus on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) setShowHeaderMenu(false)
@@ -249,7 +261,7 @@ export default function HomePage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // ─── Group enhancement helpers ───
+  // ─── Group helpers ───
   const getUserRoleInGroup = (group: Group | null): string => {
     if (!group || !user) return 'member'
     const m = group.members?.find(m => m.userId === user.id || m.user?.id === user.id)
@@ -282,7 +294,7 @@ export default function HomePage() {
     if (!user) return
     const link = getInviteLink(group)
     fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`, senderId: user.id, receiverId: conv.user.id }) })
+      body: JSON.stringify({ content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`, receiverId: conv.user.id }) })
     setShareGroupViaDM(null)
   }
   const handleJoinGroup = async () => {
@@ -317,7 +329,7 @@ export default function HomePage() {
         setPinnedGroupId(currentUser.pinnedGroupId || null)
         const groupsRes = await fetch(`/api/groups?userId=${currentUser.id}`)
         if (groupsRes.ok) { const d = await groupsRes.json(); setGroups(d.groups || []) }
-        const dmRes = await fetch(`/api/dm?userId=${currentUser.id}`)
+        const dmRes = await fetch('/api/dm')
         let convs: DMConversation[] = []
         if (dmRes.ok) { const d = await dmRes.json(); convs = d.conversations || []; setDmConversations(convs) }
 
@@ -354,14 +366,14 @@ export default function HomePage() {
     loadData()
   }, [router])
 
-  // ─── Pusher: PERSISTENT user channel (always active, never unsubscribes on chat switch) ───
+  // ─── Ably: PERSISTENT user channel (never unsubscribes on chat switch) ───
   useEffect(() => {
     if (!user) return
-    const pusher = getPusherClient()
-    const userChannel = `user-${user.id}`
-    const uch = pusher.subscribe(userChannel)
+    const ably = getAblyClient()
+    const uch = ably.channels.get(`user-${user.id}`)
 
-    uch.bind('new-dm-notification', (data: { from: any; preview: string; timestamp: string }) => {
+    uch.subscribe('new-dm-notification', (msg: Ably.Message) => {
+      const data = msg.data as { from: any; preview: string; timestamp: string }
       const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
       const dmChatId = `dm_${data.from.id}`
       if (!isCurrentDM && !mutedChatsRef.current.has(dmChatId)) playReceiveSound()
@@ -369,7 +381,6 @@ export default function HomePage() {
         const idx = prev.findIndex(c => c.user.id === data.from.id)
         if (idx >= 0) {
           const updated = [...prev]
-          const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
           updated[idx] = { ...updated[idx], lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: isCurrentDM ? 0 : updated[idx].unreadCount + 1 }
           return updated.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
         }
@@ -377,43 +388,35 @@ export default function HomePage() {
       })
     })
 
-    uch.bind('new-group-notification', (data: { groupId: string; groupName: string; from: any; preview: string; messageId: string; timestamp: string }) => {
+    uch.subscribe('new-group-notification', (msg: Ably.Message) => {
+      const data = msg.data as { groupId: string; groupName: string; from: any; preview: string; messageId: string; timestamp: string }
       const isCurrentGroup = selectedChatRef.current?.id === data.groupId
       const groupChatId = `group_${data.groupId}`
       if (!isCurrentGroup && !mutedChatsRef.current.has(groupChatId)) playReceiveSound()
-
       setGroups(prev => prev.map(g => {
         if (g.id !== data.groupId) return g
-        const newMsg = {
-          id: data.messageId,
-          content: data.preview,
-          groupId: data.groupId,
-          userId: data.from.id,
-          user: data.from,
-          reactions: [],
-          createdAt: data.timestamp,
-        }
+        const newMsg = { id: data.messageId, content: data.preview, groupId: data.groupId, userId: data.from.id, user: data.from, reactions: [], createdAt: data.timestamp }
         return { ...g, messages: [...(g.messages || []), newMsg] }
       }))
     })
 
     return () => {
-      pusher.unsubscribe(userChannel)
+      uch.unsubscribe()
     }
-  }, [user?.id]) // ← ONLY depends on user.id — never re-runs on chat switch
+  }, [user?.id])
 
-  // ─── Pusher: Chat-specific channels (changes with selected chat) ───
+  // ─── Ably: Chat-specific channels (group or DM) ───
   useEffect(() => {
     if (!user) return
-    const pusher = getPusherClient()
-    const subscriptions: string[] = []
+    const ably = getAblyClient()
+    const channels: Ably.RealtimeChannel[] = []
 
     if (selectedChat) {
-      const groupChannel = getGroupChannelName(selectedChat.id)
-      const ch = pusher.subscribe(groupChannel)
-      subscriptions.push(groupChannel)
+      const ch = ably.channels.get(getGroupChannelName(selectedChat.id))
+      channels.push(ch)
 
-      ch.bind('new-message', (data: { message: Message }) => {
+      ch.subscribe('new-message', (msg: Ably.Message) => {
+        const data = msg.data as { message: Message }
         setMessages(prev => {
           if (prev.some(m => m.id === data.message.id)) return prev
           const tempIdx = prev.findIndex(m => m.id.startsWith('temp_') && m.userId === data.message.userId && m.content === data.message.content)
@@ -423,15 +426,18 @@ export default function HomePage() {
         })
       })
 
-      ch.bind('message-deleted', (data: { messageId: string }) => {
+      ch.subscribe('message-deleted', (msg: Ably.Message) => {
+        const data = msg.data as { messageId: string }
         setMessages(prev => prev.filter(m => m.id !== data.messageId))
       })
 
-      ch.bind('message-edited', (data: { messageId: string; content: string }) => {
+      ch.subscribe('message-edited', (msg: Ably.Message) => {
+        const data = msg.data as { messageId: string; content: string }
         setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, content: data.content } : m))
       })
 
-      ch.bind('typing', (data: { userId: string; userName: string; isTyping: boolean }) => {
+      ch.subscribe('typing', (msg: Ably.Message) => {
+        const data = msg.data as { userId: string; userName: string; isTyping: boolean }
         if (data.userId === user.id) return
         setTypingUsers(prev => {
           const next = { ...prev }
@@ -451,11 +457,11 @@ export default function HomePage() {
     }
 
     if (selectedDM) {
-      const dmChannel = getDMChannelName(user.id, selectedDM.user.id)
-      const ch = pusher.subscribe(dmChannel)
-      subscriptions.push(dmChannel)
+      const ch = ably.channels.get(getDMChannelName(user.id, selectedDM.user.id))
+      channels.push(ch)
 
-      ch.bind('new-message', (data: { message: DMMessage }) => {
+      ch.subscribe('new-message', (msg: Ably.Message) => {
+        const data = msg.data as { message: DMMessage }
         setDmMessages(prev => {
           if (prev.some(m => m.id === data.message.id)) return prev
           const tempIdx = prev.findIndex(m => m.id.startsWith('temp_') && m.senderId === data.message.senderId && m.content === data.message.content)
@@ -470,22 +476,26 @@ export default function HomePage() {
         })
       })
 
-      ch.bind('message-deleted', (data: { messageId: string }) => {
+      ch.subscribe('message-deleted', (msg: Ably.Message) => {
+        const data = msg.data as { messageId: string }
         setDmMessages(prev => prev.filter(m => m.id !== data.messageId))
       })
 
-      ch.bind('message-edited', (data: { messageId: string; content: string }) => {
+      ch.subscribe('message-edited', (msg: Ably.Message) => {
+        const data = msg.data as { messageId: string; content: string }
         setDmMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, content: data.content } : m))
       })
 
-      ch.bind('messages-read', (data: { readBy: string; readAt: string }) => {
+      ch.subscribe('messages-read', (msg: Ably.Message) => {
+        const data = msg.data as { readBy: string; readAt: string }
         if (data.readBy !== user.id) {
           setDmReadStatus(true)
           setDmMessages(prev => prev.map(m => m.senderId === user.id ? { ...m, read: true } : m))
         }
       })
 
-      ch.bind('typing', (data: { userId: string; userName: string; isTyping: boolean }) => {
+      ch.subscribe('typing', (msg: Ably.Message) => {
+        const data = msg.data as { userId: string; userName: string; isTyping: boolean }
         if (data.userId === user.id) return
         setTypingUsers(prev => {
           const next = { ...prev }
@@ -507,16 +517,18 @@ export default function HomePage() {
     return () => {
       setTypingUsers({})
       setDmReadStatus(false)
-      subscriptions.forEach(ch => pusher.unsubscribe(ch))
+      channels.forEach(ch => ch.unsubscribe())
     }
   }, [selectedChat?.id, selectedDM?.user.id, user?.id])
 
   // ── Presence ──
   useEffect(() => {
     if (!user) return
-    const pusher = getPusherClient()
-    const presenceCh = pusher.subscribe('presence-updates')
-    presenceCh.bind('status-change', (data: { userId: string; status: string }) => {
+    const ably = getAblyClient()
+    const presenceCh = ably.channels.get('presence-updates')
+
+    presenceCh.subscribe('status-change', (msg: Ably.Message) => {
+      const data = msg.data as { userId: string; status: string }
       setOnlineUsers(prev => {
         const next = new Set(prev)
         if (data.status === 'online') next.add(data.userId)
@@ -524,19 +536,21 @@ export default function HomePage() {
         return next
       })
     })
+
     const reportOnline = () => {
-      fetch('/api/pusher/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, status: 'online' }) }).catch(() => {})
+      fetch('/api/ably/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, status: 'online' }) }).catch(() => {})
     }
     reportOnline()
     const heartbeat = setInterval(reportOnline, 30000)
+
     const handleUnload = () => {
-      navigator.sendBeacon('/api/pusher/presence', JSON.stringify({ userId: user.id, status: 'offline' }))
+      navigator.sendBeacon('/api/ably/presence', JSON.stringify({ userId: user.id, status: 'offline' }))
     }
     window.addEventListener('beforeunload', handleUnload)
     return () => {
       clearInterval(heartbeat)
       window.removeEventListener('beforeunload', handleUnload)
-      pusher.unsubscribe('presence-updates')
+      presenceCh.unsubscribe()
       handleUnload()
     }
   }, [user?.id])
@@ -551,14 +565,14 @@ export default function HomePage() {
     if (selectedChat) { body.channelType = 'group'; body.channelId = selectedChat.id }
     else if (selectedDM) { body.channelType = 'dm'; body.channelId = selectedDM.user.id; body.otherUserId = selectedDM.user.id }
     else return
-    fetch('/api/pusher/typing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {})
+    fetch('/api/ably/typing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {})
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     typingTimeoutRef.current = setTimeout(() => {
-      fetch('/api/pusher/typing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, isTyping: false }) }).catch(() => {})
+      fetch('/api/ably/typing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, isTyping: false }) }).catch(() => {})
     }, 3000)
   }, [user, selectedChat, selectedDM])
 
-  // ── Light polling fallback ──
+  // ── Light polling fallback (every 15s as backup only) ──
   useEffect(() => {
     const poll = async () => {
       try {
@@ -569,10 +583,9 @@ export default function HomePage() {
           if (res.ok) { const data = await res.json(); if (data.messages?.length > 0) { setMessages(prev => { const ids = new Set(prev.map(m => m.id)); const n = data.messages.filter((m: Message) => !ids.has(m.id)); return n.length > 0 ? [...prev, ...n] : prev }) } }
         }
         if (selectedDMRef.current && dmMessagesRef.current.length > 0) {
-          const userStr = localStorage.getItem('user'); if (!userStr) return; const cu = JSON.parse(userStr)
           const lastMsg = dmMessagesRef.current[dmMessagesRef.current.length - 1]
           if (lastMsg.id.startsWith('temp_')) return
-          const res = await fetch(`/api/dm?userId=${cu.id}&otherUserId=${selectedDMRef.current.user.id}&after=${encodeURIComponent(lastMsg.createdAt)}`)
+          const res = await fetch(`/api/dm?otherUserId=${selectedDMRef.current.user.id}&after=${encodeURIComponent(lastMsg.createdAt)}`)
           if (res.ok) { const data = await res.json(); if (data.messages?.length > 0) { setDmMessages(prev => { const ids = new Set(prev.map(m => m.id)); const n = data.messages.filter((m: DMMessage) => !ids.has(m.id)); return n.length > 0 ? [...prev, ...n] : prev }) } }
         }
       } catch {}
@@ -649,7 +662,7 @@ export default function HomePage() {
     setNewDMMessage(''); clearAttachments(); setShowInputEmoji(false); setShowGifPicker(false); setReplyingTo(null)
     if (inputRef.current) { inputRef.current.style.height = 'auto' }
     try {
-      const body: any = { content: savedMsg, senderId: user.id, receiverId: selectedDM.user.id }
+      const body: any = { content: savedMsg, receiverId: selectedDM.user.id }
       if (savedImg) body.imageUrl = savedImg
       if (savedFile) { body.fileUrl = savedFile.url; body.fileName = savedFile.name; body.fileType = savedFile.type }
       if (savedReply) body.replyToId = savedReply.id
@@ -700,7 +713,7 @@ export default function HomePage() {
   }
   const loadDMMessages = async (otherUserId: string) => {
     if (!user) return; setIsLoadingMessages(true)
-    try { const res = await fetch(`/api/dm?userId=${user.id}&otherUserId=${otherUserId}`); if (res.ok) { const d = await res.json(); setDmMessages(d.messages || []) } }
+    try { const res = await fetch(`/api/dm?otherUserId=${otherUserId}`); if (res.ok) { const d = await res.json(); setDmMessages(d.messages || []) } }
     catch (err) { console.error('Error:', err) }
     finally { setIsLoadingMessages(false) }
   }
@@ -771,7 +784,7 @@ export default function HomePage() {
   }
   const handleForwardMessage = (msg: Message | DMMessage) => { setForwardingMessage({ content: msg.content, imageUrl: msg.imageUrl }); setMessageActionId(null) }
   const forwardToChat = (group: Group) => { if (!forwardingMessage || !user) return; const body: any = { content: forwardingMessage.content || '', groupId: group.id, userId: user.id }; if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl; fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); setForwardingMessage(null) }
-  const forwardToDM = (conv: DMConversation) => { if (!forwardingMessage || !user) return; const body: any = { content: forwardingMessage.content || '', senderId: user.id, receiverId: conv.user.id }; if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl; fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); setForwardingMessage(null) }
+  const forwardToDM = (conv: DMConversation) => { if (!forwardingMessage || !user) return; const body: any = { content: forwardingMessage.content || '', receiverId: conv.user.id }; if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl; fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); setForwardingMessage(null) }
   const shouldShowDateSeparator = (msgs: { createdAt: string }[], idx: number) => { if (idx === 0) return true; return new Date(msgs[idx - 1].createdAt).toDateString() !== new Date(msgs[idx].createdAt).toDateString() }
 
   if (isLoading) return (
@@ -816,7 +829,6 @@ export default function HomePage() {
     )
   }
 
-  // ─── Render a message bubble (shared between group and DM) ───
   const renderMsgBubble = (msg: any, idx: number, allMsgs: any[], isDM: boolean) => {
     const isOwn = isDM ? msg.senderId === user?.id : msg.userId === user?.id
     const isTemp = msg.id.startsWith('temp_')
@@ -856,8 +868,8 @@ export default function HomePage() {
                 <div className={`flex gap-1 mt-1 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                   {reactionEntries.map(([emoji, data]) => (
                     <button key={emoji} onClick={(e) => { e.stopPropagation(); isDM ? handleDMReaction(msg.id, emoji) : handleReaction(msg.id, emoji) }}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${data.userReacted ? 'bg-indigo-600/20 text-indigo-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} style={{ border: data.userReacted ? '1px solid #a5b4fc' : '1px solid #e5e7eb' }}>
-                      <span>{emoji}</span><span className="font-bold">{data.count}</span>
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all ${(data as any).userReacted ? 'bg-indigo-600/20 text-indigo-500' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} style={{ border: (data as any).userReacted ? '1px solid #a5b4fc' : '1px solid #e5e7eb' }}>
+                      <span>{emoji}</span><span className="font-bold">{(data as any).count}</span>
                     </button>
                   ))}
                 </div>
@@ -893,25 +905,75 @@ export default function HomePage() {
     )
   }
 
+  // ── Mobile helpers ───────────────────────────────────────────────
+  const handleSelectChatMobile = (chat: any) => {
+    handleSelectChat(chat)
+    if (isMobile) setMobileView('chat')
+  }
+  const handleSelectDMMobile = (conv: DMConversation) => {
+    handleSelectDM(conv)
+    if (isMobile) setMobileView('chat')
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50"
+    <div
+      className="flex h-screen bg-gray-50"
+      style={{ position: "relative", overflow: isMobile ? "hidden" : "hidden" }}
       onClick={() => { initSounds(); setShowEmojiPicker(null); setShowInputEmoji(false); setSidebarMenuId(null); setMessageActionId(null) }}>
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
       <input ref={imageInputRef} type="file" className="hidden" onChange={handleImageSelect} accept="image/*" />
 
-      {/* ===== LEFT SIDEBAR ===== */}
-      <aside className="w-[220px] flex flex-col flex-shrink-0 border-r" style={{ background: 'white', borderColor: '#e5e7eb' }}>
-        <div className="px-5 py-5"><div className="flex items-center gap-2.5"><div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center"><span className="text-white font-bold text-xs">CA</span></div><span className="font-bold text-[15px] text-gray-900 tracking-tight">Campus Arena</span></div></div>
-        <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-1">
-          <NavItem icon={<MessageSquare className="w-[18px] h-[18px]" />} label="Chat" active />
-          <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks" onClick={() => router.push('/home/campus-talks')} />
-        </nav>
-        <div className="px-3 py-4" style={{ borderTop: '1px solid #e5e7eb' }}><button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium"><LogOut className="w-[18px] h-[18px]" /><span>Log out</span></button></div>
-      </aside>
+      {/* ── MOBILE TOP BAR — shown only on mobile when not in chat view ── */}
+      {isMobile && mobileView !== 'chat' && (
+        <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 z-30 border-b"
+          style={{ background: 'white', borderColor: '#e5e7eb' }}>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-[10px]">CA</span>
+            </div>
+            <span className="font-bold text-[15px] text-gray-900 tracking-tight">Campus Arena</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <NotificationBell userId={user?.id || ''} />
+          </div>
+        </div>
+      )}
 
-      {/* ===== MIDDLE PANEL (Chat List) ===== */}
-      <aside className="w-[340px] flex flex-col flex-shrink-0 border-r" style={{ background: 'white', borderColor: '#e5e7eb' }}>
-        <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #e5e7eb' }}>
+      {/* ── LEFT SIDEBAR — desktop only ── */}
+      {!isMobile && (
+        <aside className="w-[220px] flex flex-col flex-shrink-0 border-r" style={{ background: 'white', borderColor: '#e5e7eb' }}>
+          <div className="px-5 py-5">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0"><span className="text-white font-bold text-xs">CA</span></div>
+              <div className="min-w-0">
+                <span className="font-bold text-[15px] text-gray-900 tracking-tight block leading-tight">Campus Arena</span>
+                {user?.university && <span className="text-[11px] text-indigo-500 font-semibold truncate block leading-tight mt-0.5">{user.university.split('.')[0].toUpperCase()}</span>}
+              </div>
+            </div>
+          </div>
+          <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-1">
+            <NavItem icon={<MessageSquare className="w-[18px] h-[18px]" />} label="Chat" active />
+            <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks" onClick={() => router.push('/home/campus-talks')} />
+          </nav>
+          <div className="px-3 py-4" style={{ borderTop: '1px solid #e5e7eb' }}><button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium"><LogOut className="w-[18px] h-[18px]" /><span>Log out</span></button></div>
+        </aside>
+      )}
+
+      {/* ── MIDDLE PANEL — full screen on mobile when mobileView==='list' ── */}
+      <aside
+        className="flex flex-col flex-shrink-0 border-r"
+        style={{
+          background: 'white', borderColor: '#e5e7eb',
+          width: isMobile ? '100%' : '340px',
+          display: 'flex',
+          position: isMobile ? 'absolute' : 'relative',
+          top: isMobile ? '56px' : 0, left: 0, bottom: isMobile ? '60px' : 0, zIndex: isMobile ? 20 : 'auto',
+          overflowY: isMobile ? 'auto' : undefined,
+          transform: isMobile && mobileView !== 'list' ? 'translateX(-100%)' : 'translateX(0)',
+          transition: isMobile ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : undefined,
+          visibility: isMobile && mobileView !== 'list' ? 'hidden' : 'visible',
+        }}>
+        <div className="px-5 pb-4" style={{ borderBottom: '1px solid #e5e7eb', paddingTop: '20px' }}>
           <h2 className="text-xl font-bold text-gray-900 mb-4">Chat</h2>
           <div className="relative flex rounded-xl p-1" style={{ background: '#f3f4f6' }}>
             <div className="absolute top-1 bottom-1 rounded-lg shadow-lg transition-all duration-300 ease-out" style={{ background: '#4f46e5', width: 'calc(50% - 4px)', left: activeTab === 'groups' ? '4px' : 'calc(50%)' }}></div>
@@ -924,7 +986,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="px-5 py-3" style={{ borderBottom: '1px solid #e5e7eb' }}><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" /><input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search conversations..." className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/30 transition-all text-gray-900" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }} /></div></div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4" style={{ paddingBottom: isMobile ? '72px' : undefined }}>
           {activeTab === 'groups' && (
             <div>
               <div className="flex items-center justify-between mb-3 px-1">
@@ -944,7 +1006,7 @@ export default function HomePage() {
                   const isDef = group.isDefault
                   return (
                     <div key={group.id} className="relative group/item" data-sidebar-menu>
-                      <button onClick={() => handleSelectChat(group)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
+                      <button onClick={() => handleSelectChatMobile(group)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
                         style={isSel ? { background: '#4f46e5' } : {}}>
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSel ? 'bg-white/60' : 'bg-indigo-50'}`}>
                           {isPrivate ? <Lock className={`w-4 h-4 ${isSel ? 'text-white' : 'text-indigo-500'}`} /> : <Users className={`w-5 h-5 ${isSel ? 'text-white' : 'text-indigo-500'}`} />}
@@ -1006,7 +1068,7 @@ export default function HomePage() {
                   const muted = isMuted(chatId)
                   return (
                     <div key={conv.user.id} className="relative group/item" data-sidebar-menu>
-                      <button onClick={() => handleSelectDM(conv)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
+                      <button onClick={() => handleSelectDMMobile(conv)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
                         style={isSel ? { background: 'rgba(79, 70, 229, 0.08)', border: '1px solid rgba(79, 70, 229, 0.15)' } : {}}>
                         <div className="relative flex-shrink-0">
                           <UserAvatar src={conv.user.profileImage} firstName={conv.user.firstName} lastName={conv.user.lastName} size={40} onClick={() => setProfileViewUserId(conv.user.id)} />
@@ -1040,11 +1102,26 @@ export default function HomePage() {
         </div>
       </aside>
 
-      {/* ===== MAIN CHAT AREA ===== */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Chat Header */}
-        <div className="h-[64px] px-6 flex items-center justify-between flex-shrink-0" style={{ background: 'white', borderBottom: '1px solid #e5e7eb' }}>
+      {/* MAIN CHAT AREA */}
+      {/* ── MAIN CHAT AREA — hidden on mobile unless mobileView==='chat' ── */}
+      <div
+        className="flex-1 flex flex-col min-w-0"
+        style={{
+          display: 'flex',
+          position: isMobile ? 'absolute' : 'relative',
+          top: 0, left: 0, right: 0, bottom: isMobile ? '60px' : 0, zIndex: isMobile ? 10 : 'auto',
+          transform: isMobile && mobileView !== 'chat' ? 'translateX(100%)' : 'translateX(0)',
+          transition: isMobile ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : undefined,
+          visibility: isMobile && mobileView !== 'chat' ? 'hidden' : 'visible',
+        }}>
+        <div className="h-[64px] flex items-center justify-between flex-shrink-0" style={{ background: 'white', borderBottom: '1px solid #e5e7eb', padding: isMobile ? '0 16px' : '0 24px' }}>
           <div className="flex items-center gap-3">
+            {/* Mobile back button */}
+            {isMobile && (
+              <button onClick={() => setMobileView('list')} className="p-1.5 -ml-1 rounded-lg text-gray-500 hover:bg-gray-50 transition-all mr-1">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
             {isGroupMode && selectedChat && (<>
               <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#4f46e5' }}>
                 {selectedChat.visibility === 'private' ? <Lock className="w-5 h-5 text-white" /> : <Users className="w-5 h-5 text-white" />}
@@ -1105,8 +1182,7 @@ export default function HomePage() {
 
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 flex flex-col min-w-0">
-            {/* Messages Area */}
-            <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-4 relative" style={{ background: 'linear-gradient(160deg, #f0f0ff 0%, #e8eeff 40%, #f5f0ff 70%, #eef0ff 100%)' }}>
+            <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-4 relative" style={{ background: 'linear-gradient(160deg, #f0f0ff 0%, #e8eeff 40%, #f5f0ff 70%, #eef0ff 100%)', paddingBottom: isMobile ? '70px' : undefined }}>
               {isGroupMode && selectedChat && (
                 isLoadingMessages ? <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
                 : messages.length > 0 ? (<div className="space-y-1">{messages.map((m, i) => renderMsgBubble(m, i, messages, false))}<div ref={messagesEndRef} /></div>)
@@ -1118,10 +1194,9 @@ export default function HomePage() {
                 : <EmptyChat title="No messages yet" subtitle={`Send a message to ${selectedDM.user.firstName}!`} />
               )}
               {!isGroupMode && !isDMMode && <EmptyChat title="Select a conversation" subtitle="Choose a group or DM to start chatting" />}
-              {showScrollDown && (<button onClick={() => scrollToBottom()} className="fixed bottom-24 right-8 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-10" style={{ background: 'white', border: '1px solid #e5e7eb' }}><ChevronDown className="w-5 h-5 text-indigo-500" /></button>)}
+              {showScrollDown && (<button onClick={() => scrollToBottom()} className="fixed right-5 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-10" style={{ bottom: isMobile ? '80px' : '96px', background: 'white', border: '1px solid #e5e7eb' }}><ChevronDown className="w-5 h-5 text-indigo-500" /></button>)}
             </div>
 
-            {/* Message Input */}
             {(isGroupMode || isDMMode) && (
               <div className="flex-shrink-0" style={{ background: 'white', borderTop: '1px solid #e5e7eb' }}>
                 {Object.keys(typingUsers).length > 0 && (<div className="px-6 pt-2 pb-0"><div className="flex items-center gap-2 text-xs text-gray-500"><span className="flex gap-0.5"><span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} /><span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} /><span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} /></span><span className="font-medium text-indigo-600">{(() => { const names = Object.values(typingUsers).map(t => t.name.split(' ')[0]); if (names.length === 1) return `${names[0]} is typing...`; if (names.length === 2) return `${names[0]} and ${names[1]} are typing...`; return `${names[0]} and ${names.length - 1} others are typing...` })()}</span></div></div>)}
@@ -1154,8 +1229,30 @@ export default function HomePage() {
 
           {/* GROUP INFO PANEL */}
           {showGroupInfo && isGroupMode && selectedChat && (
-            <div className="w-[300px] flex flex-col flex-shrink-0 overflow-hidden" style={{ background: 'white', borderLeft: '1px solid #e5e7eb' }}>
-              <div className="h-[64px] px-5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid #e5e7eb' }}><h3 className="text-sm font-bold text-gray-900">Group Info</h3><button onClick={() => setShowGroupInfo(false)} className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-500 hover:text-gray-600 transition-all"><X className="w-4 h-4" /></button></div>
+            <div
+              className="flex flex-col flex-shrink-0 overflow-hidden"
+              style={{
+                background: 'white',
+                borderLeft: isMobile ? 'none' : '1px solid #e5e7eb',
+                width: isMobile ? '100%' : '300px',
+                position: isMobile ? 'absolute' : 'relative',
+                top: 0, left: 0, right: 0, bottom: isMobile ? '60px' : 0, zIndex: isMobile ? 30 : 'auto',
+                overflowY: isMobile ? 'auto' : undefined,
+                transform: isMobile ? 'translateX(0)' : undefined,
+                transition: isMobile ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : undefined,
+              }}>
+              <div className="h-[64px] px-4 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid #e5e7eb' }}>
+                {isMobile ? (
+                  <button onClick={() => setShowGroupInfo(false)} className="flex items-center gap-1 text-indigo-600 font-semibold text-[15px] -ml-1 p-1.5 rounded-lg hover:bg-indigo-50 transition-all">
+                    <ChevronLeft className="w-5 h-5" /><span>Back</span>
+                  </button>
+                ) : (
+                  <h3 className="text-sm font-bold text-gray-900">Group Info</h3>
+                )}
+                <div className="flex items-center gap-1">
+                  {!isMobile && <button onClick={() => setShowGroupInfo(false)} className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-500 hover:text-gray-600 transition-all"><X className="w-4 h-4" /></button>}
+                </div>
+              </div>
               <div className="px-5 py-6 flex flex-col items-center" style={{ borderBottom: '1px solid #e5e7eb' }}>
                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3" style={{ background: '#4f46e5' }}><span className="text-white font-bold text-lg">{getGroupInitials(selectedChat.name)}</span></div>
                 <h4 className="text-base font-bold text-gray-900 text-center">{selectedChat.name}</h4>
@@ -1173,15 +1270,7 @@ export default function HomePage() {
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Invite Code</p>
                         <p className="text-[15px] font-mono font-bold text-gray-900 tracking-widest">{selectedChat.inviteCode}</p>
                       </div>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(selectedChat.inviteCode || '')
-                          setCopiedInviteCode(true)
-                          setTimeout(() => setCopiedInviteCode(false), 2000)
-                        }}
-                        className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                        title="Copy invite code"
-                      >
+                      <button onClick={() => { navigator.clipboard.writeText(selectedChat.inviteCode || ''); setCopiedInviteCode(true); setTimeout(() => setCopiedInviteCode(false), 2000) }} className="p-2 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all" title="Copy invite code">
                         {copiedInviteCode ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                       </button>
                     </div>
@@ -1222,29 +1311,18 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ===== MODALS ===== */}
-
-      {/* Create Group Modal */}
+      {/* MODALS */}
       {showCreateGroup && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowCreateGroup(false)}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-5">Create a Group</h2>
             <div className="mb-4"><label className="block text-sm font-semibold text-gray-700 mb-2">Group Name</label><input type="text" value={groupForm.name} onChange={e => { setGroupForm(p => ({ ...p, name: e.target.value })); if (groupErrors.name) setGroupErrors(p => ({ ...p, name: '' })) }} placeholder="e.g., Study Group" className={`w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/30 text-gray-900 placeholder-gray-400 ${groupErrors.name ? 'ring-1 ring-red-500' : ''}`} style={{ background: 'white', border: '1px solid #e5e7eb' }} />{groupErrors.name && <p className="text-xs text-red-400 flex items-center gap-1 mt-1.5"><AlertCircle className="w-3.5 h-3.5" />{groupErrors.name}</p>}</div>
             <div className="mb-4"><label className="block text-sm font-semibold text-gray-700 mb-2">Description</label><textarea value={groupForm.description} onChange={e => { setGroupForm(p => ({ ...p, description: e.target.value })); if (groupErrors.description) setGroupErrors(p => ({ ...p, description: '' })) }} placeholder="What's this group about?" rows={3} className={`w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/30 resize-none text-gray-900 placeholder-gray-400 ${groupErrors.description ? 'ring-1 ring-red-500' : ''}`} style={{ background: 'white', border: '1px solid #e5e7eb' }} />{groupErrors.description && <p className="text-xs text-red-400 flex items-center gap-1 mt-1.5"><AlertCircle className="w-3.5 h-3.5" />{groupErrors.description}</p>}</div>
-            {/* Visibility Toggle */}
             <div className="mb-6">
               <label className="block text-sm font-semibold text-gray-700 mb-2">Visibility</label>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setGroupForm(p => ({ ...p, visibility: 'public' }))}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${groupForm.visibility === 'public' ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-500' : 'text-gray-500 hover:bg-gray-50'}`}
-                  style={groupForm.visibility !== 'public' ? { border: '1px solid #e5e7eb' } : {}}>
-                  <Globe className="w-4 h-4" />Public
-                </button>
-                <button type="button" onClick={() => setGroupForm(p => ({ ...p, visibility: 'private' }))}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${groupForm.visibility === 'private' ? 'bg-amber-50 text-amber-600 ring-2 ring-amber-500' : 'text-gray-500 hover:bg-gray-50'}`}
-                  style={groupForm.visibility !== 'private' ? { border: '1px solid #e5e7eb' } : {}}>
-                  <Lock className="w-4 h-4" />Private
-                </button>
+                <button type="button" onClick={() => setGroupForm(p => ({ ...p, visibility: 'public' }))} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${groupForm.visibility === 'public' ? 'bg-indigo-50 text-indigo-600 ring-2 ring-indigo-500' : 'text-gray-500 hover:bg-gray-50'}`} style={groupForm.visibility !== 'public' ? { border: '1px solid #e5e7eb' } : {}}><Globe className="w-4 h-4" />Public</button>
+                <button type="button" onClick={() => setGroupForm(p => ({ ...p, visibility: 'private' }))} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${groupForm.visibility === 'private' ? 'bg-amber-50 text-amber-600 ring-2 ring-amber-500' : 'text-gray-500 hover:bg-gray-50'}`} style={groupForm.visibility !== 'private' ? { border: '1px solid #e5e7eb' } : {}}><Lock className="w-4 h-4" />Private</button>
               </div>
               <p className="text-[11px] text-gray-400 mt-1.5">{groupForm.visibility === 'public' ? 'Anyone from your university can find and join' : 'Only people with the invite link can join'}</p>
             </div>
@@ -1253,18 +1331,13 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Join Group Modal */}
       {showJoinModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => { setShowJoinModal(false); setJoinCode(''); setJoinError('') }}>
           <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-1">Join a Group</h2>
             <p className="text-sm text-gray-500 mb-5">Enter an invite code to join a group</p>
             <div className="mb-4">
-              <input type="text" value={joinCode} onChange={e => { setJoinCode(e.target.value); setJoinError('') }}
-                onKeyDown={e => { if (e.key === 'Enter') handleJoinGroup() }}
-                placeholder="Enter invite code..." autoFocus
-                className={`w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/30 text-gray-900 placeholder-gray-400 ${joinError ? 'ring-1 ring-red-500' : ''}`}
-                style={{ background: 'white', border: '1px solid #e5e7eb' }} />
+              <input type="text" value={joinCode} onChange={e => { setJoinCode(e.target.value); setJoinError('') }} onKeyDown={e => { if (e.key === 'Enter') handleJoinGroup() }} placeholder="Enter invite code..." autoFocus className={`w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/30 text-gray-900 placeholder-gray-400 ${joinError ? 'ring-1 ring-red-500' : ''}`} style={{ background: 'white', border: '1px solid #e5e7eb' }} />
               {joinError && <p className="text-xs text-red-400 flex items-center gap-1 mt-1.5"><AlertCircle className="w-3.5 h-3.5" />{joinError}</p>}
             </div>
             <div className="flex gap-3">
@@ -1275,19 +1348,11 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Share via DM Picker Modal */}
       {shareGroupViaDM && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShareGroupViaDM(null)}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[500px] flex flex-col" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Share "{shareGroupViaDM.name}"</h2>
-              <button onClick={() => setShareGroupViaDM(null)} className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-              <p className="text-xs text-gray-500 truncate flex-1">{getInviteLink(shareGroupViaDM)}</p>
-              <button onClick={() => copyInviteLink(shareGroupViaDM)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 flex-shrink-0">{copiedInviteLink ? 'Copied!' : 'Copy'}</button>
-            </div>
+            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold text-gray-900">Share "{shareGroupViaDM.name}"</h2><button onClick={() => setShareGroupViaDM(null)} className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button></div>
+            <div className="mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-2"><Link2 className="w-4 h-4 text-indigo-500 flex-shrink-0" /><p className="text-xs text-gray-500 truncate flex-1">{getInviteLink(shareGroupViaDM)}</p><button onClick={() => copyInviteLink(shareGroupViaDM)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 flex-shrink-0">{copiedInviteLink ? 'Copied!' : 'Copy'}</button></div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Send via DM:</p>
             <div className="flex-1 overflow-y-auto space-y-1">
               {dmConversations.length > 0 ? dmConversations.map(conv => (
@@ -1301,7 +1366,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Ping Classmates Modal */}
       {showPingModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowPingModal(false)}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[500px] flex flex-col" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
@@ -1321,7 +1385,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Logout Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowLogoutModal(false)}>
           <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
@@ -1331,7 +1394,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Forward Message Modal */}
       {forwardingMessage && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setForwardingMessage(null)}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[500px] flex flex-col" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
@@ -1356,7 +1418,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Lightbox */}
       {lightboxImage && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-8 backdrop-blur-sm" onClick={() => setLightboxImage(null)}>
           <button className="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-white/60 rounded-full text-white transition-all"><X className="w-6 h-6" /></button>
@@ -1365,6 +1426,38 @@ export default function HomePage() {
       )}
 
       <ProfileViewModal userId={profileViewUserId} onClose={() => setProfileViewUserId(null)} currentUserId={user?.id} onStartDM={handleStartDM} />
+
+      {/* ── MOBILE BOTTOM TAB BAR ── */}
+      {isMobile && (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center border-t"
+          style={{ background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderColor: '#e5e7eb', paddingBottom: 'env(safe-area-inset-bottom, 0px)', height: '60px' }}>
+          {/* Chat tab */}
+          <button onClick={() => setMobileView('list')} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
+            <div className={`p-1.5 rounded-xl transition-all relative ${mobileView !== 'chat' ? 'bg-indigo-50' : ''}`}>
+              <MessageSquare className={`w-[22px] h-[22px] ${mobileView !== 'chat' ? 'text-indigo-600' : 'text-gray-400'}`} />
+              {(() => { const t = groups.reduce((s,g)=>s+getGroupUnread(g),0)+totalUnread; return t > 0 ? <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-indigo-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{t > 99 ? '99+' : t}</span> : null })()}
+            </div>
+            <span className={`text-[10px] font-semibold ${mobileView !== 'chat' ? 'text-indigo-600' : 'text-gray-400'}`}>Chat</span>
+          </button>
+          {/* Campus Talks tab */}
+          <button onClick={() => router.push('/home/campus-talks')} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
+            <div className="p-1.5 rounded-xl">
+              <Megaphone className="w-[22px] h-[22px] text-gray-400" />
+            </div>
+            <span className="text-[10px] font-semibold text-gray-400">Talks</span>
+          </button>
+          {/* Profile/Logout tab */}
+          <button onClick={() => setShowLogoutModal(true)} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
+            <div className="p-1.5 rounded-xl">
+              {user?.profileImage
+                ? <img src={user.profileImage} className="w-[22px] h-[22px] rounded-full object-cover" />
+                : <div className="w-[22px] h-[22px] rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-[10px]">{user?.firstName?.[0]}{user?.lastName?.[0]}</div>
+              }
+            </div>
+            <span className="text-[10px] font-semibold text-gray-400">Me</span>
+          </button>
+        </nav>
+      )}
     </div>
   )
 }

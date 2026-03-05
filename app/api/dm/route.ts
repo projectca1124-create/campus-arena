@@ -1,13 +1,11 @@
-// app/api/dm/route.ts — SECURED VERSION
-// Key change: Uses getAuthUser() instead of trusting userId from request body/params
-
+// app/api/dm/route.ts — SECURED + ABLY VERSION
 import { PrismaClient } from '@prisma/client'
-import pusherServer from '@/lib/pusher-server'
+import { publishEvent } from '@/lib/ably-server'
+import { notifyDM } from '@/lib/notifications'
 import { getAuthUser } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
-// Helper: get consistent DM channel name
 function getDMChannel(id1: string, id2: string) {
   const sorted = [id1, id2].sort()
   return `dm-${sorted[0]}-${sorted[1]}`
@@ -23,17 +21,14 @@ const DM_SELECT = {
 
 export async function GET(request: Request) {
   try {
-    // ── NEW: Verify session instead of trusting query param ──
     const auth = await getAuthUser()
     if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const userId = auth.userId  // ← Trusted, from JWT
-
+    const userId = auth.userId
     const { searchParams } = new URL(request.url)
     const otherUserId = searchParams.get('otherUserId')
     const after = searchParams.get('after')
 
-    // If otherUserId, return messages between two users
     if (otherUserId) {
       const where: any = {
         OR: [
@@ -59,17 +54,17 @@ export async function GET(request: Request) {
 
         if (updated.count > 0) {
           const channel = getDMChannel(userId, otherUserId)
-          await pusherServer.trigger(channel, 'messages-read', {
+          await publishEvent(channel, 'messages-read', {
             readBy: userId,
             readAt: new Date().toISOString(),
-          }).catch(err => console.error('Pusher read receipt error:', err))
+          })
         }
       }
 
       return Response.json({ messages })
     }
 
-    // Otherwise return conversations list
+    // Return conversations list
     const allDMs = await prisma.directMessage.findMany({
       where: { OR: [{ senderId: userId }, { receiverId: userId }] },
       select: {
@@ -101,21 +96,19 @@ export async function GET(request: Request) {
 
     return Response.json({ conversations })
   } catch (error) {
-    console.error('DM error:', error)
+    console.error('DM GET error:', error)
     return Response.json({ error: 'Failed' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    // ── NEW: Verify session — senderId comes from JWT, not body ──
     const auth = await getAuthUser()
     if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = await request.json()
     const { content, receiverId, fileUrl, fileName, fileType, imageUrl, replyToId } = body
-
-    const senderId = auth.userId  // ← Trusted, from JWT (ignore body.senderId)
+    const senderId = auth.userId
 
     if (!receiverId) return Response.json({ error: 'receiverId required' }, { status: 400 })
     if (!content?.trim() && !fileUrl && !imageUrl) return Response.json({ error: 'Content required' }, { status: 400 })
@@ -123,7 +116,7 @@ export async function POST(request: Request) {
     const message = await prisma.directMessage.create({
       data: {
         content: content || '',
-        senderId,        // ← From JWT, not from request body
+        senderId,
         receiverId,
         fileUrl: fileUrl || null,
         fileName: fileName || null,
@@ -133,14 +126,17 @@ export async function POST(request: Request) {
       select: DM_SELECT,
     })
 
-    // Pusher: broadcast new DM
+    // Ably: broadcast to DM channel (both users subscribed)
     const channel = getDMChannel(senderId, receiverId)
-    await pusherServer.trigger(channel, 'new-message', {
-      message,
-    }).catch(err => console.error('Pusher DM trigger error:', err))
+    await publishEvent(channel, 'new-message', { message })
 
-    // Pusher: notify receiver
-    await pusherServer.trigger(`user-${receiverId}`, 'new-dm-notification', {
+    // DB notification + Ably push
+    const preview = content?.substring(0, 60) || '📎 Attachment'
+    const senderName = `${message.sender.firstName} ${message.sender.lastName}`
+    await notifyDM(receiverId, senderName, preview, senderId).catch(() => {})
+
+    // Ably: notify receiver on their personal channel
+    await publishEvent(`user-${receiverId}`, 'new-dm-notification', {
       from: {
         id: message.sender.id,
         firstName: message.sender.firstName,
@@ -149,11 +145,11 @@ export async function POST(request: Request) {
       },
       preview: content?.substring(0, 50) || '📎 Attachment',
       timestamp: message.createdAt,
-    }).catch(err => console.error('Pusher notification error:', err))
+    })
 
     return Response.json({ message })
   } catch (error) {
-    console.error('Send DM error:', error)
+    console.error('DM POST error:', error)
     return Response.json({ error: 'Failed to send' }, { status: 500 })
   }
 }

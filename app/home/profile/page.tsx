@@ -236,6 +236,7 @@ export default function ProfilePage() {
         semester: editForm.semester,
         academicStanding: editForm.academicStanding,
         bio: editForm.bio,
+        hometown: editForm.hometown,
         interests: selectedInterests,
       } : {
         userId: user.id,

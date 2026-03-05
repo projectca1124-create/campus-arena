@@ -32,6 +32,7 @@ model User {
   updatedAt          DateTime @updatedAt
 
   groups              GroupMember[]
+  joinRequests        GroupJoinRequest[]
   messages            Message[]
   messageReactions    MessageReaction[]
   dmReactions         DMReaction[]         @relation("UserDMReactions")
@@ -69,6 +70,7 @@ model Group {
 
   members  GroupMember[]
   messages Message[]
+  joinRequests GroupJoinRequest[]
 
   @@index([university])
   @@index([isDefault])
@@ -413,3 +415,17 @@ model Waitlist {
 
   @@index([email])
 }
+
+model GroupJoinRequest {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String
+  status    String   @default("pending") // "pending" | "approved" | "rejected"
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+}
+

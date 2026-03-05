@@ -1,5 +1,5 @@
-// Save as: app/api/pusher/typing/route.ts
-import pusherServer from '@/lib/pusher-server'
+// app/api/ably/typing/route.ts — Typing indicator via Ably
+import { publishEvent } from '@/lib/ably-server'
 
 export async function POST(request: Request) {
   try {
@@ -13,12 +13,11 @@ export async function POST(request: Request) {
     if (channelType === 'group') {
       channel = `group-${channelId}`
     } else {
-      // DM channel
       const sorted = [userId, otherUserId].sort()
       channel = `dm-${sorted[0]}-${sorted[1]}`
     }
 
-    await pusherServer.trigger(channel, 'typing', {
+    await publishEvent(channel, 'typing', {
       userId,
       userName: userName || 'Someone',
       isTyping: isTyping !== false,
@@ -26,7 +25,7 @@ export async function POST(request: Request) {
 
     return Response.json({ success: true })
   } catch (error) {
-    console.error('Typing trigger error:', error)
+    console.error('Typing error:', error)
     return Response.json({ error: 'Failed' }, { status: 500 })
   }
 }

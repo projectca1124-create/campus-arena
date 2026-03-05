@@ -60,7 +60,7 @@ const WHY = [
 
 const FAQ_DATA = [
   { q:"Is Campus Arena free?", a:"Yes. Completely free for all verified students. No hidden fees, no premium tiers, no ads. If you have a .edu email, you're in." },
-  { q:"Which universities are supported?", a:"We're rolling out campus by campus. If your university isn't live yet, join the waitlist and we'll let you know the moment it launches. The more students from your campus who sign up, the faster it goes live." },
+  { q:"Which universities are supported?", a:"All of them. If your university has a .edu email, you're in. We built Campus Arena to work for every college and university from day one — no waitlist, no rollout schedule, no exceptions." },
   { q:"How do I sign up?", a:"Sign up with your university email. We'll send you a verification code. Once verified, you're placed into your campus community and matched with groups. Takes about two minutes." },
   { q:"Is my data safe?", a:"Your privacy matters to us. We don't sell your data, we don't run ads, and we don't share your information with anyone. Your conversations stay between you and your campus community." },
   { q:"Can I use it after I graduate?", a:"Absolutely. Alumni keep their accounts. Keep participating in Campus Talks, mentoring students, and staying connected. Your campus doesn't end at graduation." },
@@ -79,37 +79,96 @@ function useReveal(th = 0.1): [React.RefObject<any>, boolean] {
   return [r, v]
 }
 
-/* ═══ COMPONENTS — Design C: Floating Capsule ═══ */
+/* ═══ COMPONENTS — Apple iMessage Notification Style ═══ */
 function Card({ card, accent = "#6366f1" }: { card: typeof CARDS[0]; accent?: string }) {
   const tint = card.type === "msg" ? card.bg || accent : accent
+
   if (card.type === "msg") return (
-    <div style={{ display:"flex", gap:"11px", alignItems:"flex-start", position:"relative", zIndex:1 }}>
+    <div style={{ display:"flex", gap:"10px", alignItems:"center" }}>
+      {/* App icon — exact Apple notification avatar style */}
       <div style={{
-        width:"34px", height:"34px", borderRadius:"50%",
-        background: card.bg,
+        width:"36px", height:"36px", borderRadius:"10px",
+        background: `linear-gradient(145deg, ${card.bg}, ${card.bg}cc)`,
         display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize:"13px", color:"#fff", fontWeight:800, fontFamily:"var(--heading)",
-        flexShrink:0, boxShadow:`0 2px 8px ${card.bg}25`,
+        fontSize:"14px", color:"#fff", fontWeight:800,
+        fontFamily:"-apple-system, 'SF Pro Display', sans-serif",
+        flexShrink:0,
+        boxShadow:`0 2px 6px ${card.bg}55, inset 0 1px 0 rgba(255,255,255,0.25)`,
       }}>{card.av}</div>
+
+      {/* Content */}
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:"6px", marginBottom:"4px" }}>
-          <span style={{ fontFamily:"var(--heading)", fontSize:"12.5px", fontWeight:700, color:"#1a1a2e" }}>{card.name}</span>
+        {/* Top row: name + tag + time — Apple notification header */}
+        <div style={{ display:"flex", alignItems:"baseline", gap:"5px", marginBottom:"2px" }}>
           <span style={{
-            fontSize:"9px", fontWeight:700, color:"white",
-            background: card.bg, padding:"2px 7px", borderRadius:"100px",
-            letterSpacing:"0.03em",
+            fontFamily:"-apple-system, 'SF Pro Text', sans-serif",
+            fontSize:"12px", fontWeight:600,
+            color:"rgba(0,0,0,0.85)",
+            letterSpacing:"-0.01em",
+          }}>{card.name}</span>
+          <span style={{
+            fontSize:"9.5px", fontWeight:600,
+            color: "rgba(255,255,255,0.95)",
+            background: card.bg,
+            padding:"1.5px 6px", borderRadius:"100px",
+            letterSpacing:"0.02em",
+            lineHeight:"1.4",
           }}>{card.tag}</span>
-          <span style={{ fontSize:"9.5px", color:"#bbb", marginLeft:"auto" }}>{card.time}</span>
+          <span style={{
+            fontFamily:"-apple-system, 'SF Pro Text', sans-serif",
+            fontSize:"11px", color:"rgba(0,0,0,0.35)",
+            marginLeft:"auto", flexShrink:0,
+            letterSpacing:"-0.01em",
+          }}>{card.time}</span>
         </div>
-        <p style={{ fontSize:"12px", color:"#555", lineHeight:1.5 }}>{card.text}</p>
+        {/* Message text — Apple uses slightly muted, not pure black */}
+        <p style={{
+          fontFamily:"-apple-system, 'SF Pro Text', sans-serif",
+          fontSize:"12.5px",
+          color:"rgba(0,0,0,0.6)",
+          lineHeight:1.35,
+          fontWeight:400,
+          letterSpacing:"-0.005em",
+          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+        }}>{card.text}</p>
       </div>
     </div>
   )
+
+  // Notification-style note (system event)
   return (
-    <div style={{ display:"flex", alignItems:"center", gap:"10px", position:"relative", zIndex:1 }}>
-      <span style={{ fontSize:"17px" }}>{card.emoji}</span>
-      <p style={{ fontSize:"12px", color:"#555", flex:1, lineHeight:1.45 }}>{card.text}</p>
-      <span style={{ fontSize:"9.5px", color:"#bbb", fontWeight:500, flexShrink:0 }}>{card.time}</span>
+    <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+      {/* System icon bubble */}
+      <div style={{
+        width:"36px", height:"36px", borderRadius:"10px",
+        background:`linear-gradient(145deg, ${accent}ee, ${accent}aa)`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize:"17px", flexShrink:0,
+        boxShadow:`0 2px 6px ${accent}44, inset 0 1px 0 rgba(255,255,255,0.2)`,
+      }}>{card.emoji}</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:"1px" }}>
+          <span style={{
+            fontFamily:"-apple-system, 'SF Pro Text', sans-serif",
+            fontSize:"11.5px", fontWeight:600,
+            color:"rgba(0,0,0,0.5)",
+            letterSpacing:"0.01em", textTransform:"uppercase",
+          }}>Campus Arena</span>
+          <span style={{
+            fontFamily:"-apple-system, 'SF Pro Text', sans-serif",
+            fontSize:"11px", color:"rgba(0,0,0,0.35)",
+            letterSpacing:"-0.01em",
+          }}>{card.time}</span>
+        </div>
+        <p style={{
+          fontFamily:"-apple-system, 'SF Pro Text', sans-serif",
+          fontSize:"12.5px",
+          color:"rgba(0,0,0,0.65)",
+          lineHeight:1.35,
+          fontWeight:400,
+          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+        }}>{card.text}</p>
+      </div>
     </div>
   )
 }
@@ -284,28 +343,37 @@ export default function Home() {
           const pos: Record<string,string> = {}; if(sl.top) pos.top=sl.top; if(sl.left) pos.left=sl.left; if(sl.right) pos.right=sl.right
           return (
             <div key={si} style={{
-              position:"absolute", ...pos, zIndex:3, pointerEvents:"none", maxWidth:"255px",
+              position:"absolute", ...pos, zIndex:3, pointerEvents:"none", maxWidth:"272px", minWidth:"220px",
               opacity:iv?1:0,
-              transform:iv?"translateY(0) scale(1)":"translateY(12px) scale(0.95)",
-              transition:`opacity 0.7s ${e}, transform 0.7s ${e}`,
+              transform:iv?"translateY(0) scale(1)":"translateY(10px) scale(0.97)",
+              transition:`opacity 0.55s ${e}, transform 0.55s ${e}`,
               animation:iv?`cf${si} ${sl.d}s ease-in-out infinite`:"none",
-              filter: iv ? "none" : "blur(3px)",
             }}>
+              {/* Apple Live Notification glass shell */}
               <div style={{
-                background:`linear-gradient(135deg, ${tint}08, ${tint}04)`,
-                backdropFilter:"blur(20px)",
-                WebkitBackdropFilter:"blur(20px)",
-                borderRadius:"24px",
-                padding: cd.type === "msg" ? "14px 16px" : "12px 16px",
-                border:`1.5px solid ${tint}12`,
-                boxShadow:`0 12px 40px ${tint}08, 0 2px 8px rgba(0,0,0,0.03)`,
+                background:"rgba(250,250,252,0.78)",
+                backdropFilter:"blur(48px) saturate(2) brightness(1.04)",
+                WebkitBackdropFilter:"blur(48px) saturate(2) brightness(1.04)",
+                borderRadius:"22px",
+                padding:"11px 12px 12px",
+                border:"0.5px solid rgba(255,255,255,0.9)",
+                boxShadow:[
+                  "0 0 0 0.5px rgba(0,0,0,0.07)",
+                  "0 12px 36px rgba(0,0,0,0.11)",
+                  "0 3px 10px rgba(0,0,0,0.06)",
+                  "inset 0 1px 0 rgba(255,255,255,0.95)",
+                  "inset 0 -1px 0 rgba(0,0,0,0.03)",
+                ].join(", "),
                 position:"relative",
                 overflow:"hidden",
               }}>
-                {/* Bottom gradient fade */}
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"40%", background:`linear-gradient(180deg, transparent, ${tint}06)`, borderRadius:"0 0 24px 24px", pointerEvents:"none" }} />
-                {/* Floating dot accent */}
-                <div style={{ position:"absolute", top:"8px", right:"10px", width:"5px", height:"5px", borderRadius:"50%", background:tint, opacity:0.25 }} />
+                {/* Apple specular sheen — micro gloss on top half */}
+                <div style={{
+                  position:"absolute", top:0, left:0, right:0, height:"48%",
+                  background:"linear-gradient(180deg, rgba(255,255,255,0.32) 0%, transparent 100%)",
+                  borderRadius:"22px 22px 0 0",
+                  pointerEvents:"none",
+                }} />
                 <Card card={cd} accent={sl.accent} />
               </div>
             </div>

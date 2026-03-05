@@ -1,5 +1,4 @@
 // app/api/groups/route.ts
-
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -22,16 +21,9 @@ export async function GET(request: Request) {
               include: {
                 user: {
                   select: {
-                    id: true,
-                    email: true,
-                    firstName: true,
-                    lastName: true,
-                    university: true,
-                    major: true,
-                    degree: true,
-                    semester: true,
-                    year: true,
-                    profileImage: true,
+                    id: true, email: true, firstName: true, lastName: true,
+                    university: true, major: true, degree: true,
+                    semester: true, year: true, profileImage: true,
                   },
                 },
               },
@@ -39,12 +31,7 @@ export async function GET(request: Request) {
             messages: {
               include: {
                 user: {
-                  select: {
-                    id: true,
-                    firstName: true,
-                    lastName: true,
-                    profileImage: true,
-                  },
+                  select: { id: true, firstName: true, lastName: true, profileImage: true },
                 },
               },
               orderBy: { createdAt: 'desc' },
@@ -62,9 +49,11 @@ export async function GET(request: Request) {
       icon: gm.group.icon,
       type: gm.group.type,
       isDefault: gm.group.isDefault,
+      visibility: gm.group.visibility,   // ✅ was missing
+      inviteCode: gm.group.inviteCode,   // ✅ was missing
       university: gm.group.university,
-      degree: gm.group.degree, // Add degree to response
-      major: gm.group.major,   // Add major to response
+      degree: gm.group.degree,
+      major: gm.group.major,
       members: gm.group.members,
       messages: gm.group.messages,
     }))
@@ -72,9 +61,6 @@ export async function GET(request: Request) {
     return Response.json({ success: true, groups })
   } catch (error) {
     console.error('❌ Get groups error:', error)
-    return Response.json(
-      { error: 'Failed to fetch groups', details: String(error) },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to fetch groups', details: String(error) }, { status: 500 })
   }
 }
