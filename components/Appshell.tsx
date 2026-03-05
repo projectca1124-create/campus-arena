@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { MessageSquare, Megaphone, LogOut, Lock } from 'lucide-react'
+import { MessageSquare, Megaphone, LogOut, Lock, ArrowLeft } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 
 interface ShellUser {
