@@ -308,8 +308,8 @@ export default function Home() {
         {!mob && (
           <div style={{ position:"absolute", left:"50%", transform:"translateX(-50%)", display:"flex", alignItems:"center", gap:"32px" }}>
             {["Your Journey","Why Arena?","Questions"].map((l,i) => (
-              <button key={l} onClick={() => go(["journey","why","questions"][i])} style={{ background:"none", border:"none", fontFamily:"var(--body)", fontSize:"13.5px", fontWeight:500, color:"#666", cursor:"pointer", transition:"color 0.2s" }}
-                onMouseEnter={(ev) => (ev.target as HTMLElement).style.color="#6366f1"} onMouseLeave={(ev) => (ev.target as HTMLElement).style.color="#666"}
+              <button key={l} onClick={() => go(["journey","why","questions"][i])} style={{ background:"none", border:"none", fontFamily:"var(--heading)", fontSize:"15px", fontWeight:600, color:"#1a1a2e", cursor:"pointer", transition:"color 0.2s", letterSpacing:"-0.01em" }}
+                onMouseEnter={(ev) => (ev.target as HTMLElement).style.color="#6366f1"} onMouseLeave={(ev) => (ev.target as HTMLElement).style.color="#1a1a2e"}
               >{l}</button>
             ))}
           </div>

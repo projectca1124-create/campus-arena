@@ -41,7 +41,8 @@ interface Message {
 interface Group {
   id: string; name: string; description?: string; icon?: string; type?: string
   isDefault?: boolean; visibility?: string; inviteCode?: string
-  university?: string; members: GroupMember[]; messages: Message[]
+  university?: string; identifier?: string; degree?: string; major?: string
+  members: GroupMember[]; messages: Message[]
 }
 interface DMConversation {
   user: { id: string; firstName: string; lastName: string; profileImage?: string; major?: string; year?: string }
@@ -90,6 +91,56 @@ function formatDateSeparator(dateStr: string) {
 function getGroupInitials(name: string) {
   return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
+function getGroupAbbr(group: Group): string {
+  // University arena group: "UTA Arena", "ASU Arena" etc — show university code
+  if (group.identifier && group.identifier.includes('-arena')) {
+    return group.identifier.split('-arena')[0].toUpperCase()
+  }
+  // Major group: identifier like "major-computer-science-uta.edu"
+  // Extract major part and abbreviate
+  if (group.identifier && group.identifier.startsWith('major-')) {
+    const major = group.name.trim()
+    // Known abbreviations
+    const abbrs: Record<string, string> = {
+      'computer science': 'CS',
+      'data science': 'DS',
+      'electrical engineering': 'EE',
+      'mechanical engineering': 'ME',
+      'civil engineering': 'CE',
+      'chemical engineering': 'ChE',
+      'business administration': 'BA',
+      'information technology': 'IT',
+      'information systems': 'IS',
+      'software engineering': 'SE',
+      'computer engineering': 'CpE',
+      'biomedical engineering': 'BME',
+      'industrial engineering': 'IE',
+      'aerospace engineering': 'AE',
+      'mathematics': 'MATH',
+      'physics': 'PHY',
+      'chemistry': 'CHEM',
+      'biology': 'BIO',
+      'psychology': 'PSY',
+      'nursing': 'NUR',
+      'finance': 'FIN',
+      'accounting': 'ACCT',
+      'marketing': 'MKT',
+      'economics': 'ECON',
+      'english': 'ENG',
+      'history': 'HIST',
+      'political science': 'POLS',
+      'communications': 'COMM',
+      'architecture': 'ARCH',
+      'pre-med': 'PM',
+    }
+    const lower = major.toLowerCase()
+    if (abbrs[lower]) return abbrs[lower]
+    // Fallback: first letters of each word, max 3 chars
+    return major.split(' ').map(w => w[0]).filter(Boolean).slice(0, 3).join('').toUpperCase()
+  }
+  // Fallback for any other default group
+  return getGroupInitials(group.name)
+}
 function getFileIcon(fileType?: string) {
   if (!fileType) return <File className="w-5 h-5" />
   if (fileType.includes('pdf')) return <FileText className="w-5 h-5 text-red-500" />
@@ -118,6 +169,11 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [joinRequests, setJoinRequests] = useState<any[]>([])
+  const [showJoinRequests, setShowJoinRequests] = useState(false)
+  const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false)
+  const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false)
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false)
   const [groupForm, setGroupForm] = useState({ name: '', description: '', visibility: 'public' as 'public' | 'private' })
   const [groupErrors, setGroupErrors] = useState<Record<string, string>>({})
   const [isCreating, setIsCreating] = useState(false)
@@ -297,6 +353,73 @@ export default function HomePage() {
       body: JSON.stringify({ content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`, receiverId: conv.user.id }) })
     setShareGroupViaDM(null)
   }
+  const handleDeleteGroup = async () => {
+    if (!selectedChat || !user) return
+    setIsDeletingGroup(true)
+    try {
+      const res = await fetch(`/api/groups/${selectedChat.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      })
+      if (res.ok) {
+        setGroups(prev => prev.filter(g => g.id !== selectedChat.id))
+        setSelectedChat(null)
+        setShowDeleteGroupModal(false)
+        setShowHeaderMenu(false)
+      }
+    } catch (err) { console.error('Delete group error:', err) }
+    finally { setIsDeletingGroup(false) }
+  }
+
+  const handleLeaveGroup = async () => {
+    if (!selectedChat || !user) return
+    try {
+      const res = await fetch('/api/groups/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, groupId: selectedChat.id }),
+      })
+      if (res.ok) {
+        setGroups(prev => prev.filter(g => g.id !== selectedChat.id))
+        setSelectedChat(null)
+        setShowLeaveGroupModal(false)
+        setShowHeaderMenu(false)
+      }
+    } catch (err) { console.error('Leave group error:', err) }
+  }
+
+  const handleLoadJoinRequests = async (groupId: string) => {
+    if (!user) return
+    try {
+      const res = await fetch(`/api/groups/${groupId}?adminId=${user.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        setJoinRequests(data.requests || [])
+        setShowJoinRequests(true)
+      }
+    } catch {}
+  }
+
+  const handleApproveReject = async (requesterId: string, action: 'approve' | 'reject') => {
+    if (!selectedChat || !user) return
+    try {
+      const res = await fetch(`/api/groups/${selectedChat.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminId: user.id, requesterId, action }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setJoinRequests(prev => prev.filter(r => r.user.id !== requesterId))
+        if (action === 'approve' && data.group) {
+          setGroups(prev => prev.map(g => g.id === selectedChat.id ? data.group : g))
+          setSelectedChat(data.group)
+        }
+      }
+    } catch {}
+  }
+
   const handleJoinGroup = async () => {
     if (!joinCode.trim() || !user) return; setIsJoining(true); setJoinError('')
     try {
@@ -337,6 +460,36 @@ export default function HomePage() {
           const params = new URLSearchParams(window.location.search)
           const joinCodeParam = params.get('joinCode')
           if (joinCodeParam) { setJoinCode(joinCodeParam); setShowJoinModal(true); window.history.replaceState({}, '', '/home') }
+          // Handle join-request notification click: ?groupId=X&approveUser=Y
+          const groupIdParam = params.get('groupId')
+          const approveUserParam = params.get('approveUser')
+          if (groupIdParam && approveUserParam) {
+            window.history.replaceState({}, '', '/home')
+            // Wait briefly for groups to load then open join requests
+            setTimeout(async () => {
+              const userStr2 = localStorage.getItem('user')
+              if (!userStr2) return
+              const u2 = JSON.parse(userStr2)
+              const res = await fetch(`/api/groups/${groupIdParam}?adminId=${u2.id}`)
+              if (res.ok) {
+                const data = await res.json()
+                setJoinRequests(data.requests || [])
+                setShowJoinRequests(true)
+                // Also select the group
+                const groupsRes2 = await fetch(`/api/groups?userId=${u2.id}`)
+                if (groupsRes2.ok) {
+                  const gd = await groupsRes2.json()
+                  const g = (gd.groups || []).find((g: any) => g.id === groupIdParam)
+                  if (g) { setSelectedChat(g); loadMessages(g.id) }
+                }
+              }
+            }, 500)
+          }
+
+          // Auto-switch to DMs tab if requested (e.g. from explore page)
+          const tabParam = params.get('tab')
+          if (tabParam === 'dms') setActiveTab('dms')
+
           const openDMId = params.get('openDM')
           if (openDMId) {
             const dmDataStr = sessionStorage.getItem('openDM')
@@ -353,10 +506,18 @@ export default function HomePage() {
             const existing = convs.find(c => c.user.id === dmData.id || c.user.id === openDMId)
             if (existing) {
               setSelectedDM(existing); setSelectedChat(null)
+              // Load existing messages — was missing, caused empty chat on Connect
+              const dmRes2 = await fetch(`/api/dm?otherUserId=${existing.user.id}`)
+              if (dmRes2.ok) { const d = await dmRes2.json(); setDmMessages(d.messages || []) }
+              // Mark as read
+              setDmConversations(prev => prev.map(conv =>
+                conv.user.id === existing.user.id ? { ...conv, unreadCount: 0 } : conv
+              ))
             } else {
               setSelectedDM({ user: dmData, lastMessage: '', lastMessageAt: new Date().toISOString(), unreadCount: 0 })
               setSelectedChat(null); setDmMessages([])
             }
+            if (isMobile) setMobileView('chat')
             window.history.replaceState({}, '', '/home')
           }
         } catch {}
@@ -454,6 +615,23 @@ export default function HomePage() {
           return next
         })
       })
+
+      ch.subscribe('group-deleted', () => {
+        setGroups(prev => prev.filter(g => g.id !== selectedChat?.id))
+        setSelectedChat(null)
+      })
+
+      ch.subscribe('member-left', (msg: Ably.Message) => {
+        const data = msg.data as { userId: string; groupId: string }
+        setGroups(prev => prev.map(g => {
+          if (g.id !== data.groupId) return g
+          return { ...g, members: g.members.filter(m => m.userId !== data.userId) }
+        }))
+        setSelectedChat(prev => {
+          if (!prev || prev.id !== data.groupId) return prev
+          return { ...prev, members: prev.members.filter(m => m.userId !== data.userId) }
+        })
+      })
     }
 
     if (selectedDM) {
@@ -492,6 +670,13 @@ export default function HomePage() {
           setDmReadStatus(true)
           setDmMessages(prev => prev.map(m => m.senderId === user.id ? { ...m, read: true } : m))
         }
+      })
+
+      ch.subscribe('reaction-updated', (msg: Ably.Message) => {
+        const data = msg.data as { messageId: string; reactions: Reaction[] }
+        setDmMessages(prev => prev.map(m =>
+          m.id === data.messageId ? { ...m, reactions: data.reactions } : m
+        ))
       })
 
       ch.subscribe('typing', (msg: Ably.Message) => {
@@ -771,6 +956,17 @@ export default function HomePage() {
   const handleCopyMessage = (msg: Message | DMMessage) => {
     navigator.clipboard.writeText(msg.content || '').then(() => { setCopiedMsgId(msg.id); setMessageActionId(null); setTimeout(() => setCopiedMsgId(null), 2000) })
   }
+  const handleDeleteForEveryone = async (msg: Message | DMMessage) => {
+    setMessageActionId(null)
+    try {
+      const res = await fetch(`/api/messages/${msg.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, deleteForEveryone: true }),
+      })
+      if (res.ok) setMessages(prev => prev.filter(m => m.id !== msg.id))
+    } catch {}
+  }
   const handleDeleteMessage = async (msg: Message | DMMessage) => {
     setMessageActionId(null); const isGroupMsg = 'groupId' in msg
     try { const res = await fetch(`/api/messages/${msg.id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id }) }); if (res.ok) { if (isGroupMsg) setMessages(prev => prev.filter(m => m.id !== msg.id)); else setDmMessages(prev => prev.filter(m => m.id !== msg.id)) } } catch {}
@@ -822,14 +1018,80 @@ export default function HomePage() {
     if (!replyTo) return null
     const replyName = replyTo.user ? `${replyTo.user.firstName} ${replyTo.user.lastName}` : replyTo.sender ? `${replyTo.sender.firstName} ${replyTo.sender.lastName}` : 'Unknown'
     return (
-      <div className={`mb-2 px-3 py-2 rounded-lg ${isOwn ? 'bg-indigo-600/20' : 'bg-gray-700/40'}`} style={{ borderLeftWidth: 3, borderLeftStyle: 'solid', borderLeftColor: isOwn ? '#a5b4fc' : '#6366f1' }}>
-        <p className={`text-[11px] font-bold ${isOwn ? 'text-indigo-200' : 'text-indigo-500'}`}>{replyName}</p>
-        <p className={`text-[11px] ${isOwn ? 'text-indigo-100/70' : 'text-gray-400'} line-clamp-1`}>{replyTo.content || (replyTo.imageUrl ? '📷 Photo' : 'Message')}</p>
+      <div
+        className="flex items-stretch mb-2 rounded-lg overflow-hidden cursor-pointer"
+        style={{ background: isOwn ? 'rgba(255,255,255,0.15)' : 'rgba(99,102,241,0.08)', borderLeft: '3px solid', borderLeftColor: isOwn ? 'rgba(255,255,255,0.6)' : '#6366f1' }}
+      >
+        <div className="px-2.5 py-1.5 flex-1 min-w-0">
+          <p className={`text-[11px] font-bold mb-0.5 ${isOwn ? 'text-white/80' : 'text-indigo-600'}`}>{replyName}</p>
+          {replyTo.imageUrl && !replyTo.content && (
+            <p className={`text-[11px] flex items-center gap-1 ${isOwn ? 'text-white/60' : 'text-gray-500'}`}>📷 Photo</p>
+          )}
+          {replyTo.content && (
+            <p className={`text-[11px] line-clamp-2 ${isOwn ? 'text-white/70' : 'text-gray-500'}`}>{replyTo.content}</p>
+          )}
+        </div>
+        {replyTo.imageUrl && (
+          <img src={replyTo.imageUrl} alt="" className="w-10 h-10 object-cover flex-shrink-0 rounded-r-lg" />
+        )}
       </div>
     )
   }
 
+  // Render message text with clickable URLs and group invite links
+  const renderMessageContent = (content: string, isOwn: boolean) => {
+    if (!content) return null
+    // Match URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const parts = content.split(urlRegex)
+    return parts.map((part, i) => {
+      if (!urlRegex.test(part) && !part.match(/^https?:\/\//)) {
+        // reset lastIndex after split
+        return <React.Fragment key={i}>{part}</React.Fragment>
+      }
+      // Check if it's a group invite link for this app
+      const isInviteLink = part.includes('/home?joinCode=') || part.includes('joinCode=')
+      const joinCodeMatch = part.match(/joinCode=([a-z0-9]+)/i)
+      if (isInviteLink && joinCodeMatch) {
+        return (
+          <button
+            key={i}
+            onClick={(e) => {
+              e.stopPropagation()
+              setJoinCode(joinCodeMatch[1])
+              setShowJoinModal(true)
+            }}
+            className={`inline-flex items-center gap-1 underline font-semibold rounded px-0.5 transition-all ${isOwn ? 'text-indigo-100 hover:text-white' : 'text-indigo-600 hover:text-indigo-800'}`}
+          >
+            🔗 Join Group
+          </button>
+        )
+      }
+      // Regular external URL
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={e => e.stopPropagation()}
+          className={`underline break-all ${isOwn ? 'text-indigo-100 hover:text-white' : 'text-indigo-600 hover:text-indigo-800'}`}
+        >
+          {part}
+        </a>
+      )
+    })
+  }
+
   const renderMsgBubble = (msg: any, idx: number, allMsgs: any[], isDM: boolean) => {
+    // System messages ("xyz joined/left") rendered as centered pill
+    if (msg.isSystemMessage) {
+      return (
+        <div key={msg.id} className="flex justify-center my-3">
+          <span className="text-[11px] text-gray-500 px-4 py-1 rounded-full" style={{background:'rgba(255,255,255,0.55)', backdropFilter:'blur(8px)', border:'1px solid rgba(255,255,255,0.6)'}}>{msg.content}</span>
+        </div>
+      )
+    }
     const isOwn = isDM ? msg.senderId === user?.id : msg.userId === user?.id
     const isTemp = msg.id.startsWith('temp_')
     const reactions = groupReactions(msg.reactions)
@@ -855,13 +1117,16 @@ export default function HomePage() {
                 style={isOwn ? { background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)', borderRadius: '20px 20px 6px 20px', boxShadow: '0 2px 12px rgba(99,102,241,0.25)' } : { background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.8)', borderRadius: '20px 20px 20px 6px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 {renderReplyPreview(msg.replyTo, isOwn)}
                 {editingMessage?.id === msg.id ? (
-                  <div className="flex flex-col gap-1.5">
-                    <input type="text" value={editingMessage?.content || ''} onChange={e => { const val = e.target.value; setEditingMessage(prev => prev ? { ...prev, content: val } : prev) }}
-                      onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') setEditingMessage(null) }}
-                      autoFocus className={`w-full px-2 py-1 text-sm rounded-lg outline-none ${isOwn ? 'bg-white/20 text-white placeholder-white/50' : 'bg-gray-50 text-gray-900'}`} />
+                  <div className="flex flex-col gap-1.5" style={{minWidth: 200, maxWidth: 340}}>
+                    <textarea value={editingMessage?.content || ''}
+                      onChange={e => { const val = e.target.value; setEditingMessage(prev => prev ? { ...prev, content: val } : prev); e.target.style.height='auto'; e.target.style.height=Math.min(e.target.scrollHeight,120)+'px' }}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit() }; if (e.key === 'Escape') setEditingMessage(null) }}
+                      autoFocus rows={2}
+                      className={`w-full px-2 py-1 text-sm rounded-lg outline-none resize-none ${isOwn ? 'bg-white/20 text-white placeholder-white/50' : 'bg-gray-50 text-gray-900'}`}
+                      style={{minHeight:36, maxHeight:120}} />
                     <div className="flex gap-2 justify-end text-[11px]"><button onClick={() => setEditingMessage(null)} className="opacity-70 hover:opacity-100">Cancel</button><button onClick={handleSaveEdit} className="font-bold opacity-70 hover:opacity-100">Save ↵</button></div>
                   </div>
-                ) : msg.content ? <p className="whitespace-pre-wrap break-words">{msg.content}</p> : null}
+                ) : msg.content ? <p className="whitespace-pre-wrap break-words">{renderMessageContent(msg.content, isOwn)}</p> : null}
                 {renderAttachment(msg, isOwn)}
               </div>
               {reactionEntries.length > 0 && (
@@ -891,7 +1156,9 @@ export default function HomePage() {
                   {msg.content && <button onClick={() => handleCopyMessage(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">{copiedMsgId === msg.id ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400" />}<span>{copiedMsgId === msg.id ? 'Copied!' : 'Copy'}</span></button>}
                   <button onClick={() => handleForwardMessage(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"><Forward className="w-4 h-4 text-gray-400" /><span>Forward</span></button>
                   {isOwn && <button onClick={() => handleStartEdit(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"><Pencil className="w-4 h-4 text-gray-400" /><span>Edit</span></button>}
-                  {isOwn && <button onClick={() => handleDeleteMessage(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4 text-red-400" /><span>Delete</span></button>}
+                  {isOwn && !isDM && <button onClick={() => handleDeleteForEveryone(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4 text-red-400" /><span>Delete for Everyone</span></button>}
+                  {isOwn && isDM && <button onClick={() => handleDeleteMessage(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4 text-red-400" /><span>Delete</span></button>}
+                  {!isOwn && !isDM && currentUserRole === 'admin' && <button onClick={() => handleDeleteForEveryone(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"><Trash2 className="w-4 h-4 text-red-400" /><span>Delete for Everyone</span></button>}
                 </div>
               )}
             </div>
@@ -1008,8 +1275,16 @@ export default function HomePage() {
                     <div key={group.id} className="relative group/item" data-sidebar-menu>
                       <button onClick={() => handleSelectChatMobile(group)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
                         style={isSel ? { background: '#4f46e5' } : {}}>
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSel ? 'bg-white/60' : 'bg-indigo-50'}`}>
-                          {isPrivate ? <Lock className={`w-4 h-4 ${isSel ? 'text-white' : 'text-indigo-500'}`} /> : <Users className={`w-5 h-5 ${isSel ? 'text-white' : 'text-indigo-500'}`} />}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black tracking-tight ${isSel ? 'bg-white/60' : 'bg-indigo-50'}`}>
+                          {isDef ? (
+                            <span className={isSel ? 'text-indigo-700' : 'text-indigo-600'}>
+                              {getGroupAbbr(group)}
+                            </span>
+                          ) : isPrivate ? (
+                            <Lock className={`w-4 h-4 ${isSel ? 'text-white' : 'text-indigo-500'}`} />
+                          ) : (
+                            <Users className={`w-5 h-5 ${isSel ? 'text-white' : 'text-indigo-500'}`} />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
@@ -1123,8 +1398,14 @@ export default function HomePage() {
               </button>
             )}
             {isGroupMode && selectedChat && (<>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: '#4f46e5' }}>
-                {selectedChat.visibility === 'private' ? <Lock className="w-5 h-5 text-white" /> : <Users className="w-5 h-5 text-white" />}
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-black tracking-tight text-white" style={{ background: '#4f46e5' }}>
+                {selectedChat.isDefault ? (
+                  <span>{getGroupAbbr(selectedChat)}</span>
+                ) : selectedChat.visibility === 'private' ? (
+                  <Lock className="w-5 h-5 text-white" />
+                ) : (
+                  <Users className="w-5 h-5 text-white" />
+                )}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -1167,6 +1448,30 @@ export default function HomePage() {
                         </button>
                         <button onClick={() => { setShareGroupViaDM(selectedChat); setShowHeaderMenu(false) }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                           <Share2 className="w-4 h-4 text-gray-400" /><span>Share via DM</span>
+                        </button>
+                        {currentUserRole === 'admin' && (
+                          <button onClick={() => { handleLoadJoinRequests(selectedChat.id); setShowHeaderMenu(false) }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+                            <Users className="w-4 h-4 text-gray-400" /><span>Join Requests</span>
+                          </button>
+                        )}
+                        <div className="my-1 mx-3" style={{ borderTop: '1px solid #f3f4f6' }}></div>
+                        {currentUserRole !== 'admin' && (
+                          <button onClick={() => { setShowLeaveGroupModal(true); setShowHeaderMenu(false) }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-600 hover:bg-orange-50 transition-colors">
+                            <LogOut className="w-4 h-4 text-orange-400" /><span>Leave Group</span>
+                          </button>
+                        )}
+                        {currentUserRole === 'admin' && (
+                          <button onClick={() => { setShowDeleteGroupModal(true); setShowHeaderMenu(false) }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                            <Trash2 className="w-4 h-4 text-red-400" /><span>Delete Group</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {isGroupMode && selectedChat && selectedChat.isDefault && (
+                      <>
+                        <div className="my-1 mx-3" style={{ borderTop: '1px solid #f3f4f6' }}></div>
+                        <button onClick={() => { setShowLeaveGroupModal(true); setShowHeaderMenu(false) }} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-orange-600 hover:bg-orange-50 transition-colors">
+                          <LogOut className="w-4 h-4 text-orange-400" /><span>Leave Group</span>
                         </button>
                       </>
                     )}
@@ -1218,7 +1523,11 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-0.5">
                       <div className="relative"><button type="button" onClick={e => { e.stopPropagation(); setShowGifPicker(!showGifPicker); setShowInputEmoji(false) }} className={`p-2 rounded-xl transition-all ${showGifPicker ? 'text-indigo-500 bg-indigo-600/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}><Sticker className="w-[18px] h-[18px]" /></button>{showGifPicker && <GifPicker onSelect={handleGifSelect} onClose={() => setShowGifPicker(false)} />}</div>
-                      <div className="relative"><button type="button" onClick={e => { e.stopPropagation(); setShowInputEmoji(!showInputEmoji); setShowGifPicker(false) }} className={`p-2 rounded-xl transition-all ${showInputEmoji ? 'text-indigo-500 bg-indigo-600/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}><Smile className="w-[18px] h-[18px]" /></button>{showInputEmoji && <EmojiKeyboard onSelect={insertEmoji} onClose={() => setShowInputEmoji(false)} />}</div>
+                      <div className="relative"><button type="button" onClick={e => { e.stopPropagation(); setShowInputEmoji(!showInputEmoji); setShowGifPicker(false) }} className={`p-2 rounded-xl transition-all ${showInputEmoji ? 'text-indigo-500 bg-indigo-600/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}><Smile className="w-[18px] h-[18px]" /></button>{showInputEmoji && (
+                        <div onClick={e => e.stopPropagation()}>
+                          <EmojiKeyboard onSelect={(emoji) => { insertEmoji(emoji) }} onClose={() => setShowInputEmoji(false)} />
+                        </div>
+                      )}</div>
                       <button type="submit" className="w-10 h-10 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 hover:shadow-lg" style={{ background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)', boxShadow: '0 2px 10px rgba(99,102,241,0.3)' }} disabled={isGroupMode ? (!newMessage.trim() && !imagePreview && !pendingFile) : (!newDMMessage.trim() && !imagePreview && !pendingFile)}><Send className="w-4 h-4 text-white" /></button>
                     </div>
                   </form>
@@ -1254,7 +1563,9 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="px-5 py-6 flex flex-col items-center" style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3" style={{ background: '#4f46e5' }}><span className="text-white font-bold text-lg">{getGroupInitials(selectedChat.name)}</span></div>
+                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 font-black tracking-tight" style={{ background: '#4f46e5', fontSize: selectedChat.isDefault ? '13px' : '18px' }}>
+                  <span className="text-white">{selectedChat.isDefault ? getGroupAbbr(selectedChat) : getGroupInitials(selectedChat.name)}</span>
+                </div>
                 <h4 className="text-base font-bold text-gray-900 text-center">{selectedChat.name}</h4>
                 <div className="flex items-center gap-2 mt-1">
                   <p className="text-xs text-gray-500">{selectedChat.members?.length || 0} members</p>
@@ -1422,6 +1733,81 @@ export default function HomePage() {
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-8 backdrop-blur-sm" onClick={() => setLightboxImage(null)}>
           <button className="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-white/60 rounded-full text-white transition-all"><X className="w-6 h-6" /></button>
           <img src={lightboxImage} alt="" className="max-w-full max-h-full rounded-xl object-contain" onClick={e => e.stopPropagation()} />
+        </div>
+      )}
+
+      {/* ── DELETE GROUP MODAL ── */}
+      {showDeleteGroupModal && selectedChat && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowDeleteGroupModal(false)}>
+          <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 text-center mb-1">Delete Group?</h2>
+            <p className="text-sm text-gray-500 text-center mb-6">This will permanently delete <span className="font-semibold text-gray-700">"{selectedChat.name}"</span> and all its messages. This cannot be undone.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowDeleteGroupModal(false)} className="flex-1 px-4 py-2.5 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50" style={{ border: '1px solid #d1d5db' }}>Cancel</button>
+              <button onClick={handleDeleteGroup} disabled={isDeletingGroup} className="flex-1 px-4 py-2.5 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50" style={{ background: '#ef4444' }}>
+                {isDeletingGroup ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete Group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LEAVE GROUP MODAL ── */}
+      {showLeaveGroupModal && selectedChat && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowLeaveGroupModal(false)}>
+          <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+              <LogOut className="w-6 h-6 text-orange-600" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900 text-center mb-1">Leave Group?</h2>
+            <p className="text-sm text-gray-500 text-center mb-6">You'll leave <span className="font-semibold text-gray-700">"{selectedChat.name}"</span>. You can rejoin later with an invite link.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLeaveGroupModal(false)} className="flex-1 px-4 py-2.5 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50" style={{ border: '1px solid #d1d5db' }}>Cancel</button>
+              <button onClick={handleLeaveGroup} className="flex-1 px-4 py-2.5 text-white rounded-xl font-semibold text-sm" style={{ background: '#f97316' }}>Leave Group</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── JOIN REQUESTS MODAL (admin) ── */}
+      {showJoinRequests && selectedChat && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowJoinRequests(false)}>
+          <div className="rounded-2xl shadow-2xl max-w-md w-full p-6 flex flex-col max-h-[500px]" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Join Requests</h2>
+              <button onClick={() => setShowJoinRequests(false)} className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {joinRequests.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-3"><Users className="w-6 h-6 text-gray-300" /></div>
+                  <p className="text-sm text-gray-400 font-medium">No pending requests</p>
+                  <p className="text-xs text-gray-300 mt-1">All caught up!</p>
+                </div>
+              ) : joinRequests.map(req => (
+                <div key={req.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                  <UserAvatar src={req.user.profileImage} firstName={req.user.firstName} lastName={req.user.lastName} size={40} onClick={() => setProfileViewUserId(req.user.id)} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{req.user.firstName} {req.user.lastName}</p>
+                    <p className="text-xs text-gray-500">{req.user.major}{req.user.year ? ` • ${req.user.year}` : ''}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleApproveReject(req.user.id, 'reject')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-all" style={{ border: '1px solid #fca5a5' }}>
+                      Reject
+                    </button>
+                    <button onClick={() => handleApproveReject(req.user.id, 'approve')}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all" style={{ background: '#4f46e5' }}>
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

@@ -290,6 +290,21 @@ export default function CampusTalksPage() {
       .then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000) })
   }
 
+  // ── Auto-open thread from notification link (?thread=talkId) ──
+  useEffect(() => {
+    if (!talks.length) return
+    const params = new URLSearchParams(window.location.search)
+    const threadId = params.get('thread')
+    if (threadId) {
+      const match = talks.find(t => t.id === threadId)
+      if (match) {
+        setSelectedTalk(match)
+        // Clean the URL so back button works correctly
+        window.history.replaceState({}, '', '/home/campus-talks')
+      }
+    }
+  }, [talks])
+
   const activeTabIndex = TABS.findIndex(t => t.key === activeTab)
 
   return (
@@ -460,6 +475,24 @@ export default function CampusTalksPage() {
       ) : (
         /* ━━━━━━ LIST VIEW ━━━━━━ */
         <div className="h-full overflow-y-auto">
+          {/* ── Top nav bar with back button + university ── */}
+          <div className="sticky top-0 z-20 flex items-center justify-between px-6 h-14 border-b" style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderColor: '#e5e7eb' }}>
+            <div className="flex items-center gap-3">
+              <button onClick={() => router.push('/home')} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all">
+                <ArrowLeft className="w-[18px] h-[18px]" />
+              </button>
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <span className="text-white font-bold text-[10px]">CA</span>
+                </div>
+                <div>
+                  <span className="font-bold text-[14px] text-gray-900 tracking-tight leading-none block">Campus Arena</span>
+                  {user?.university && <span className="text-[11px] text-indigo-500 font-semibold leading-none block mt-0.5">{user.university}</span>}
+                </div>
+              </div>
+            </div>
+            <Megaphone className="w-[18px] h-[18px] text-indigo-400" />
+          </div>
           <div className="px-8 py-5">
             {/* Hero */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl px-7 py-5 mb-5 text-white relative overflow-hidden">

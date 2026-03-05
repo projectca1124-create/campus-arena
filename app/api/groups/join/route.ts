@@ -108,6 +108,26 @@ export async function POST(request: Request) {
       data: { userId, groupId: group.id, role: 'member' },
     })
 
+    // Post "xyz joined the group" system message
+    const joinMsg = await prisma.message.create({
+      data: {
+        content: `${user.firstName} ${user.lastName} joined the group`,
+        groupId: group.id,
+        userId,
+        fileUrl: null, fileName: null, fileType: null, imageUrl: null,
+      },
+      select: {
+        id: true, content: true, groupId: true, userId: true, createdAt: true,
+        fileUrl: true, fileName: true, fileType: true, imageUrl: true, replyToId: true,
+        replyTo: { select: { id: true, content: true, imageUrl: true, user: { select: { id: true, firstName: true, lastName: true } } } },
+        user: { select: { id: true, firstName: true, lastName: true, email: true, profileImage: true } },
+        reactions: { select: { id: true, emoji: true, messageId: true, userId: true, user: { select: { id: true, firstName: true, lastName: true } } } },
+      },
+    })
+    await publishEvent(`group-${group.id}`, 'new-message', {
+      message: { ...joinMsg, isSystemMessage: true },
+    }).catch(() => {})
+
     const updatedGroup = await prisma.group.findUnique({
       where: { id: group.id },
       include: {

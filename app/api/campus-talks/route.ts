@@ -1,6 +1,6 @@
 // app/api/campus-talks/route.ts
-
 import { PrismaClient } from '@prisma/client'
+import { createNotification } from '@/lib/notifications'
 
 const prisma = new PrismaClient()
 
@@ -51,7 +51,6 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Filter based on tab
     let filteredTalks = talks
     if (tab === 'all') {
       filteredTalks = talks.filter(t => t.responses.length > 0)
@@ -79,7 +78,6 @@ export async function GET(request: Request) {
     })
     const categories = [...new Set(allTalks.map(t => t.category).filter(Boolean))]
 
-    // ── Unanswered count (always fresh, unaffected by search/category/tab filters) ──
     const unansweredCount = await prisma.campusTalk.count({
       where: {
         university: user.university,
@@ -87,22 +85,14 @@ export async function GET(request: Request) {
       },
     })
 
-    return Response.json({
-      success: true,
-      talks: result,
-      categories,
-      unansweredCount,
-    })
+    return Response.json({ success: true, talks: result, categories, unansweredCount })
   } catch (error) {
     console.error('❌ Campus Talks GET error:', error)
-    return Response.json(
-      { error: 'Failed to fetch campus talks', details: String(error) },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to fetch campus talks', details: String(error) }, { status: 500 })
   }
 }
 
-// POST - create a new question
+// POST - create a new question + notify all university members
 export async function POST(request: Request) {
   try {
     const { title, content, category, userId } = await request.json()
@@ -113,7 +103,7 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { university: true },
+      select: { university: true, firstName: true, lastName: true },
     })
 
     if (!user) {
@@ -135,6 +125,33 @@ export async function POST(request: Request) {
       },
     })
 
+    // ── Notify all other students at the same university ──
+    // Fire-and-forget so it doesn't block the response
+    const posterName = `${user.firstName} ${user.lastName}`
+    const shortTitle = title.trim().substring(0, 60) + (title.trim().length > 60 ? '…' : '')
+    const notifLink = `/home/campus-talks?thread=${talk.id}`
+
+    prisma.user.findMany({
+      where: {
+        university: user.university,
+        id: { not: userId },           // don't notify the poster
+        onboardingComplete: true,
+      },
+      select: { id: true },
+    }).then(members => {
+      return Promise.all(
+        members.map(m =>
+          createNotification({
+            userId: m.id,
+            type: 'campus_talk',
+            title: `🎓 New question by ${posterName}`,
+            body: shortTitle,
+            link: notifLink,
+          })
+        )
+      )
+    }).catch(err => console.error('campus_talk notify error:', err))
+
     return Response.json({
       success: true,
       talk: {
@@ -145,9 +162,6 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('❌ Campus Talks POST error:', error)
-    return Response.json(
-      { error: 'Failed to create question', details: String(error) },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to create question', details: String(error) }, { status: 500 })
   }
 }

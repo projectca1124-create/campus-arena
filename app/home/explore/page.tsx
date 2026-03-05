@@ -56,6 +56,7 @@ export default function ExploreClassmatesPage() {
   const [availableMajors, setAvailableMajors] = useState<string[]>([])
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [profileViewUserId, setProfileViewUserId] = useState<string | null>(null)
+
   useEffect(() => {
     const userStr = localStorage.getItem('user')
     if (!userStr) { router.push('/auth'); return }
@@ -92,6 +93,7 @@ export default function ExploreClassmatesPage() {
   }, [searchQuery, majorFilter, yearFilter])
 
   const handleConnect = (classmate: Classmate) => {
+    // Store full DM user data in sessionStorage so home page can restore it
     sessionStorage.setItem('openDM', JSON.stringify({
       id: classmate.id,
       firstName: classmate.firstName,
@@ -100,7 +102,8 @@ export default function ExploreClassmatesPage() {
       major: classmate.major,
       year: classmate.year,
     }))
-    router.push('/home?openDM=' + classmate.id)
+    // Use replace so back button works cleanly
+    router.push('/home?openDM=' + classmate.id + '&tab=dms')
   }
 
   const getClassLabel = (semester?: string, year?: string) => {
@@ -149,7 +152,7 @@ export default function ExploreClassmatesPage() {
         Showing <span className="font-bold text-gray-900">{classmates.length}</span> students
       </p>
 
-      {/* Student Cards Grid — equal height tiles */}
+      {/* Student Cards Grid */}
       {isLoading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-indigo-400 animate-spin" /></div>
       ) : classmates.length > 0 ? (
@@ -170,7 +173,6 @@ export default function ExploreClassmatesPage() {
                   </div>
                 </div>
 
-                {/* Interest tags — fixed height so Connect button always aligns */}
                 <div className="min-h-[36px] mb-3">
                   {interests.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
@@ -197,8 +199,20 @@ export default function ExploreClassmatesPage() {
         </div>
       )}
 
-      <ProfileViewModal userId={profileViewUserId} onClose={() => setProfileViewUserId(null)} currentUserId={user?.id}
-        onStartDM={(dmUser) => { router.push(`/home?openDM=${dmUser.id}&dmName=${encodeURIComponent(dmUser.firstName + ' ' + dmUser.lastName)}`) }} />
+      <ProfileViewModal
+        userId={profileViewUserId}
+        onClose={() => setProfileViewUserId(null)}
+        currentUserId={user?.id}
+        onStartDM={(dmUser) => {
+          sessionStorage.setItem('openDM', JSON.stringify({
+            id: dmUser.id,
+            firstName: dmUser.firstName,
+            lastName: dmUser.lastName,
+            profileImage: dmUser.profileImage,
+          }))
+          router.push(`/home?openDM=${dmUser.id}&tab=dms`)
+        }}
+      />
     </div>
   )
 }

@@ -4,6 +4,11 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+// Increase body size limit so compressed profile images (~200KB) don't get rejected
+export const config = {
+  api: { bodyParser: { sizeLimit: '2mb' } },
+}
+
 const USER_SELECT = {
   id: true,
   email: true,
@@ -43,37 +48,29 @@ export async function GET(request: Request) {
       return Response.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Get activity stats
-    const questionsAsked = await prisma.campusTalk.count({
-      where: { userId },
-    })
-
-    const answersGiven = await prisma.campusTalkResponse.count({
-      where: { userId },
-    })
+    const questionsAsked = await prisma.campusTalk.count({ where: { userId } })
+    const answersGiven = await prisma.campusTalkResponse.count({ where: { userId } })
 
     return Response.json({
       success: true,
       user,
-      stats: {
-        questionsAsked,
-        answersGiven,
-      },
+      stats: { questionsAsked, answersGiven },
     })
   } catch (error) {
     console.error('❌ Profile GET error:', error)
-    return Response.json(
-      { error: 'Failed to fetch profile', details: String(error) },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to fetch profile', details: String(error) }, { status: 500 })
   }
 }
 
-// PUT - update user profile
+// PUT - update user profile (including profileImage)
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
-    const { userId, firstName, lastName, major, semester, year, funFact, profileImage, bio, hometown, minor, interests, degree, academicStanding } = body
+    const {
+      userId, firstName, lastName, major, semester, year,
+      funFact, profileImage, bio, hometown, minor,
+      interests, degree, academicStanding,
+    } = body
 
     if (!userId) {
       return Response.json({ error: 'userId is required' }, { status: 400 })
@@ -110,9 +107,6 @@ export async function PUT(request: Request) {
     return Response.json({ success: true, user })
   } catch (error) {
     console.error('❌ Profile PUT error:', error)
-    return Response.json(
-      { error: 'Failed to update profile', details: String(error) },
-      { status: 500 }
-    )
+    return Response.json({ error: 'Failed to update profile', details: String(error) }, { status: 500 })
   }
 }
