@@ -482,12 +482,7 @@ export default function CampusTalksPage() {
 
       ) : (
         <div className="h-full overflow-y-auto">
-          <div className="sticky top-0 z-20 flex items-center gap-3 px-6 h-14 border-b" style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderColor: '#e5e7eb' }}>
-            <button onClick={() => router.push('/home')} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all">
-              <ArrowLeft className="w-[18px] h-[18px]" />
-            </button>
-            <span className="font-bold text-[16px] text-gray-900 tracking-tight">Campus Talks</span>
-          </div>
+
           <div className="px-8 py-5">
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl px-7 py-5 mb-5 text-white relative overflow-hidden">
               <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/5 rounded-full"></div>

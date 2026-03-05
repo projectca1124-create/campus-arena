@@ -92,15 +92,28 @@ function getGroupInitials(name: string) {
   return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
 }
 function getGroupAbbr(group: Group): string {
-  // University arena group: "UTA Arena", "ASU Arena" etc — show university code
+  const name = group.name.trim()
+  const nameLower = name.toLowerCase()
+
+  // ── Arena groups: "UTA Arena", "ASU Arena", "MIT Arena" etc ──
+  // Strategy: take all capital-letter words before "Arena" as the abbreviation
+  // e.g. "University of Texas at Arlington Arena" → extract from identifier
   if (group.identifier && group.identifier.includes('-arena')) {
-    return group.identifier.split('-arena')[0].toUpperCase()
+    // identifier like "uta-arena", "mit-arena", "asu-arena"
+    const code = group.identifier.split('-arena')[0]
+    return code.toUpperCase()
   }
-  // Major group: identifier like "major-computer-science-uta.edu"
-  // Extract major part and abbreviate
+  // Fallback for arena groups without identifier: first word if it's an abbreviation
+  if (nameLower.includes('arena')) {
+    const words = name.split(' ').filter(w => w.toLowerCase() !== 'arena')
+    // If first word looks like an abbreviation (≤4 chars, all caps or short), use it
+    if (words.length > 0 && words[0].length <= 5) return words[0].toUpperCase()
+    // Otherwise abbreviate all words except "Arena"
+    return words.map(w => w[0]).join('').toUpperCase().slice(0, 4)
+  }
+
+  // ── Major groups ──
   if (group.identifier && group.identifier.startsWith('major-')) {
-    const major = group.name.trim()
-    // Known abbreviations
     const abbrs: Record<string, string> = {
       'computer science': 'CS',
       'data science': 'DS',
@@ -117,6 +130,7 @@ function getGroupAbbr(group: Group): string {
       'industrial engineering': 'IE',
       'aerospace engineering': 'AE',
       'mathematics': 'MATH',
+      'math': 'MATH',
       'physics': 'PHY',
       'chemistry': 'CHEM',
       'biology': 'BIO',
@@ -130,16 +144,45 @@ function getGroupAbbr(group: Group): string {
       'history': 'HIST',
       'political science': 'POLS',
       'communications': 'COMM',
+      'communication': 'COMM',
+      'sociology': 'SOC',
+      'anthropology': 'ANTH',
+      'philosophy': 'PHIL',
       'architecture': 'ARCH',
-      'pre-med': 'PM',
+      'art': 'ART',
+      'music': 'MUS',
+      'theatre': 'THE',
+      'theater': 'THE',
+      'journalism': 'JOUR',
+      'public health': 'PH',
+      'criminal justice': 'CJ',
+      'social work': 'SW',
+      'education': 'EDU',
+      'kinesiology': 'KIN',
+      'nutrition': 'NUT',
+      'environmental science': 'ENV',
+      'geoscience': 'GEO',
+      'geology': 'GEO',
+      'linguistics': 'LING',
+      'international studies': 'IS',
+      'urban planning': 'UP',
+      'supply chain': 'SCM',
+      'management': 'MGMT',
+      'human resources': 'HR',
+      'neuroscience': 'NEUR',
+      'biochemistry': 'BIOC',
+      'statistics': 'STAT',
     }
-    const lower = major.toLowerCase()
-    if (abbrs[lower]) return abbrs[lower]
-    // Fallback: first letters of each word, max 3 chars
-    return major.split(' ').map(w => w[0]).filter(Boolean).slice(0, 3).join('').toUpperCase()
+    const match = abbrs[nameLower]
+    if (match) return match
+    // Fallback: initials of each word, max 4 chars
+    return name.split(' ').map(w => w[0]).filter(Boolean).join('').toUpperCase().slice(0, 4)
   }
-  // Fallback for any other default group
-  return getGroupInitials(group.name)
+
+  // ── Any other default group: smart initials ──
+  const words = name.split(' ').filter(Boolean)
+  if (words.length === 1) return words[0].slice(0, 4).toUpperCase()
+  return words.map(w => w[0]).filter(Boolean).slice(0, 3).join('').toUpperCase()
 }
 function getFileIcon(fileType?: string) {
   if (!fileType) return <File className="w-5 h-5" />
@@ -808,9 +851,59 @@ export default function HomePage() {
     return () => {
       setTypingUsers({})
       setDmReadStatus(false)
-      channels.forEach(ch => ch.unsubscribe())
+      // Detach each channel entirely (not just unsubscribe listeners)
+      // so Ably frees the channel resource and the next subscribe starts clean
+      channels.forEach(ch => {
+        try { ch.detach() } catch {}
+      })
     }
   }, [selectedChat?.id, selectedDM?.user.id, user?.id])
+
+  // ── Connection health monitor — re-fetch missed messages on reconnect ──
+  useEffect(() => {
+    if (!user) return
+    const ably = getAblyClient()
+
+    const handleConnected = () => {
+      // When Ably reconnects after a drop, silently re-fetch to catch missed messages
+      if (selectedChatRef.current) {
+        const msgs = messagesRef.current
+        const after = msgs.length > 0 ? msgs[msgs.length - 1].createdAt : new Date(0).toISOString()
+        fetch(`/api/messages?groupId=${selectedChatRef.current.id}&after=${encodeURIComponent(after)}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.messages?.length > 0) {
+              setMessages(prev => {
+                const ids = new Set(prev.map(m => m.id))
+                const fresh = d.messages.filter((m: Message) => !ids.has(m.id))
+                return fresh.length > 0 ? [...prev, ...fresh] : prev
+              })
+            }
+          }).catch(() => {})
+      }
+      if (selectedDMRef.current) {
+        const msgs = dmMessagesRef.current
+        const after = msgs.length > 0 ? msgs[msgs.length - 1].createdAt : new Date(0).toISOString()
+        fetch(`/api/dm?otherUserId=${selectedDMRef.current.user.id}&after=${encodeURIComponent(after)}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.messages?.length > 0) {
+              setDmMessages(prev => {
+                const ids = new Set(prev.map(m => m.id))
+                const fresh = d.messages.filter((m: DMMessage) => !ids.has(m.id))
+                return fresh.length > 0 ? [...prev, ...fresh] : prev
+              })
+            }
+          }).catch(() => {})
+      }
+    }
+
+    ably.connection.on('connected', handleConnected)
+
+    return () => {
+      ably.connection.off('connected', handleConnected)
+    }
+  }, [user?.id])
 
   // ── Presence ──
   useEffect(() => {
@@ -1034,7 +1127,11 @@ export default function HomePage() {
   useEffect(() => { if (showPingModal) { const t = setTimeout(() => loadPingClassmates(pingSearchQuery), 300); return () => clearTimeout(t) } }, [pingSearchQuery, showPingModal])
 
   const handleLogout = () => setShowLogoutModal(true)
-  const confirmLogout = () => { localStorage.removeItem('user'); router.push('/auth') }
+const confirmLogout = () => {
+  localStorage.removeItem('user')
+  try { getAblyClient().close() } catch {}
+  router.push('/auth')
+}
   const filteredGroups = getSortedGroups(groups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.description?.toLowerCase().includes(searchQuery.toLowerCase())))
   const filteredDMs = dmConversations.filter(c => `${c.user.firstName} ${c.user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()))
   const totalUnread = dmConversations.reduce((s, c) => s + c.unreadCount, 0)
@@ -1424,7 +1521,7 @@ export default function HomePage() {
                       <button onClick={() => handleSelectChatMobile(group)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
                         style={isSel ? { background: '#4f46e5' } : {}}>
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black tracking-tight overflow-hidden ${isSel ? 'bg-white/60' : 'bg-indigo-50'}`}>
-                          {group.icon ? (
+                          {group.icon && !isDef ? (
                             <img src={group.icon} alt={group.name} className="w-full h-full object-cover rounded-xl" />
                           ) : isDef ? (
                             <span className={isSel ? 'text-indigo-700' : 'text-indigo-600'}>
@@ -1549,7 +1646,7 @@ export default function HomePage() {
             )}
             {isGroupMode && selectedChat && (<>
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-black tracking-tight text-white flex-shrink-0 overflow-hidden" style={{ background: '#4f46e5' }}>
-                {selectedChat.icon ? (
+                {selectedChat.icon && !selectedChat.isDefault ? (
                   <img src={selectedChat.icon} alt={selectedChat.name} className="w-full h-full object-cover" />
                 ) : selectedChat.isDefault ? (
                   <span>{getGroupAbbr(selectedChat)}</span>
@@ -1725,7 +1822,7 @@ export default function HomePage() {
               <div className="px-5 py-6 flex flex-col items-center" style={{ borderBottom: '1px solid #e5e7eb' }}>
                 {/* Group avatar — clickable for admin on non-default groups */}
                 <div className="relative mb-3 group/avatar">
-                  {selectedChat.icon ? (
+                  {selectedChat.icon && !selectedChat.isDefault ? (
                     <img
                       src={selectedChat.icon}
                       alt={selectedChat.name}

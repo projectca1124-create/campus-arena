@@ -176,7 +176,17 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
         {showTopBar && (
           <div className="h-[56px] border-b px-6 flex items-center justify-between flex-shrink-0"
             style={{ background: 'white', borderColor: '#e5e7eb' }}>
-            <h1 className="text-[15px] font-semibold text-gray-900">{displayTitle}</h1>
+            <div className="flex items-center gap-2">
+              {(isCampusTalks || isProfile || isExplore) && (
+                <button
+                  onClick={() => router.push('/home')}
+                  className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all -ml-1.5"
+                >
+                  <ArrowLeft className="w-[18px] h-[18px]" />
+                </button>
+              )}
+              <h1 className="text-[15px] font-semibold text-gray-900">{displayTitle}</h1>
+            </div>
             {user && (
               <div className="flex items-center gap-3">
                 {!isOnboarding && <NotificationBell userId={user.id} />}

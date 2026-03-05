@@ -17,7 +17,7 @@ export async function POST(request: Request) {
         // Wildcard — allows access to ALL channels
         '*': ['subscribe', 'publish', 'presence', 'history'],
       },
-      ttl: 3600000, // 1 hour token
+       ttl: 24 * 60 * 60 * 1000, // 1 hour token
     })
 
     return Response.json(tokenRequest)
