@@ -1,48 +1,34 @@
-// Save as: app/api/messages/[id]/route.ts (replace existing)
+// app/api/messages/[id]/route.ts — ABLY VERSION
 import { PrismaClient } from '@prisma/client'
-import pusherServer from '@/lib/pusher-server'
+import { publishEvent } from '@/lib/ably-server'
 
 const prisma = new PrismaClient()
 
-// Helper: get DM channel name
 function getDMChannel(id1: string, id2: string) {
   const sorted = [id1, id2].sort()
   return `dm-${sorted[0]}-${sorted[1]}`
 }
 
-// DELETE a message
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-    try {
+  try {
     const { userId } = await request.json()
     const messageId = id
 
-    // Try group message first
     const groupMsg = await prisma.message.findUnique({ where: { id: messageId }, select: { userId: true, groupId: true } })
     if (groupMsg) {
       if (groupMsg.userId !== userId) return Response.json({ error: 'Unauthorized' }, { status: 403 })
       await prisma.message.delete({ where: { id: messageId } })
-
-      // ── Pusher: broadcast deletion ──
-      await pusherServer.trigger(`group-${groupMsg.groupId}`, 'message-deleted', {
-        messageId,
-      }).catch(err => console.error('Pusher delete error:', err))
-
+      await publishEvent(`group-${groupMsg.groupId}`, 'message-deleted', { messageId })
       return Response.json({ success: true })
     }
 
-    // Try DM
     const dm = await prisma.directMessage.findUnique({ where: { id: messageId }, select: { senderId: true, receiverId: true } })
     if (dm) {
       if (dm.senderId !== userId) return Response.json({ error: 'Unauthorized' }, { status: 403 })
       await prisma.directMessage.delete({ where: { id: messageId } })
-
-      // ── Pusher: broadcast DM deletion ──
       const channel = getDMChannel(dm.senderId, dm.receiverId)
-      await pusherServer.trigger(channel, 'message-deleted', {
-        messageId,
-      }).catch(err => console.error('Pusher DM delete error:', err))
-
+      await publishEvent(channel, 'message-deleted', { messageId })
       return Response.json({ success: true })
     }
 
@@ -53,44 +39,27 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
 }
 
-// PATCH (edit) a message
-// FIXED for Next.js 16:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-    try {
+  try {
     const { content, userId } = await request.json()
     const messageId = id
-
     if (!content?.trim()) return Response.json({ error: 'Content required' }, { status: 400 })
 
-    // Try group message first
     const groupMsg = await prisma.message.findUnique({ where: { id: messageId }, select: { userId: true, groupId: true } })
     if (groupMsg) {
       if (groupMsg.userId !== userId) return Response.json({ error: 'Unauthorized' }, { status: 403 })
       const updated = await prisma.message.update({ where: { id: messageId }, data: { content } })
-
-      // ── Pusher: broadcast edit ──
-      await pusherServer.trigger(`group-${groupMsg.groupId}`, 'message-edited', {
-        messageId,
-        content,
-      }).catch(err => console.error('Pusher edit error:', err))
-
+      await publishEvent(`group-${groupMsg.groupId}`, 'message-edited', { messageId, content })
       return Response.json({ message: updated })
     }
 
-    // Try DM
     const dm = await prisma.directMessage.findUnique({ where: { id: messageId }, select: { senderId: true, receiverId: true } })
     if (dm) {
       if (dm.senderId !== userId) return Response.json({ error: 'Unauthorized' }, { status: 403 })
       const updated = await prisma.directMessage.update({ where: { id: messageId }, data: { content } })
-
-      // ── Pusher: broadcast DM edit ──
       const channel = getDMChannel(dm.senderId, dm.receiverId)
-      await pusherServer.trigger(channel, 'message-edited', {
-        messageId,
-        content,
-      }).catch(err => console.error('Pusher DM edit error:', err))
-
+      await publishEvent(channel, 'message-edited', { messageId, content })
       return Response.json({ message: updated })
     }
 
