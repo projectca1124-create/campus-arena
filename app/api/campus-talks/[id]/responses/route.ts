@@ -1,5 +1,4 @@
 // app/api/campus-talks/[id]/responses/route.ts
-
 import { PrismaClient } from '@prisma/client'
 import { notifyTalkResponse } from '@/lib/notifications'
 
@@ -7,7 +6,7 @@ const prisma = new PrismaClient()
 
 // GET - list responses for a campus talk
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -38,12 +37,12 @@ export async function GET(
 
     return Response.json({ success: true, talk, responses })
   } catch (error) {
-    console.error('❌ Responses GET error:', error)
-    return Response.json({ error: 'Failed to fetch responses', details: String(error) }, { status: 500 })
+    console.error('Responses GET error:', error)
+    return Response.json({ error: 'Failed to fetch responses' }, { status: 500 })
   }
 }
 
-// POST - add a response + notify question author
+// POST - add a response + notify question author instantly
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -55,6 +54,13 @@ export async function POST(
     if (!content || !userId) {
       return Response.json({ error: 'content and userId are required' }, { status: 400 })
     }
+
+    // Don't let someone respond to their own question and notify themselves
+    const talk = await prisma.campusTalk.findUnique({
+      where: { id },
+      select: { userId: true, title: true },
+    })
+    if (!talk) return Response.json({ error: 'Talk not found' }, { status: 404 })
 
     const response = await prisma.campusTalkResponse.create({
       data: { content: content.trim(), campusTalkId: id, userId },
@@ -69,18 +75,24 @@ export async function POST(
       },
     })
 
-    // Notify the question author (non-blocking)
-    const responderName = `${response.user.firstName} ${response.user.lastName}`
-    notifyTalkResponse(id, userId, responderName).catch(() => {})
+    // Notify the question author — real-time via Ably + persisted in DB bell
+    // Only notify if the responder is NOT the author
+    if (talk.userId !== userId) {
+      const responderName = `${response.user.firstName} ${response.user.lastName}`
+      const preview = content.trim().substring(0, 80) + (content.trim().length > 80 ? '…' : '')
+      notifyTalkResponse(id, userId, responderName).catch(err =>
+        console.error('notifyTalkResponse error:', err)
+      )
+    }
 
     return Response.json({ success: true, response })
   } catch (error) {
-    console.error('❌ Response POST error:', error)
-    return Response.json({ error: 'Failed to post response', details: String(error) }, { status: 500 })
+    console.error('Response POST error:', error)
+    return Response.json({ error: 'Failed to post response' }, { status: 500 })
   }
 }
 
-// DELETE - remove a response
+// DELETE - remove a response (author only)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -88,7 +100,6 @@ export async function DELETE(
   try {
     const { id: talkId } = await params
     const url = new URL(request.url)
-    // Support /responses/[responseId] pattern
     const pathParts = url.pathname.split('/')
     const responseId = pathParts[pathParts.length - 1]
     const { userId } = await request.json()
@@ -98,15 +109,13 @@ export async function DELETE(
     if (response.userId !== userId) return Response.json({ error: 'Unauthorized' }, { status: 403 })
 
     await prisma.campusTalkResponse.delete({ where: { id: responseId } })
-
     return Response.json({ success: true })
   } catch (error) {
-    console.error('❌ Response DELETE error:', error)
-    return Response.json({ error: 'Failed to delete response', details: String(error) }, { status: 500 })
+    return Response.json({ error: 'Failed to delete response' }, { status: 500 })
   }
 }
 
-// PUT - edit a response
+// PUT - edit a response (author only)
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -134,7 +143,6 @@ export async function PUT(
 
     return Response.json({ success: true, response: updated })
   } catch (error) {
-    console.error('❌ Response PUT error:', error)
-    return Response.json({ error: 'Failed to update response', details: String(error) }, { status: 500 })
+    return Response.json({ error: 'Failed to update response' }, { status: 500 })
   }
 }

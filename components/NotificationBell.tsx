@@ -92,7 +92,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
     const setup = async () => {
       try {
-        const ably = getAblyClient()
+        const ably = getAblyClient(userId)  // pass userId so auth works for fresh signup
         channel = ably.channels.get(`user-${userId}`)
         if (!mounted) return
         // Attach listener directly — Ably deduplicates identical listeners

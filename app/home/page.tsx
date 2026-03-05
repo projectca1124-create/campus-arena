@@ -566,9 +566,22 @@ export default function HomePage() {
         const currentUser = JSON.parse(userStr) as User
         setUser(currentUser)
         setPinnedGroupId(currentUser.pinnedGroupId || null)
+
+        // Pre-connect Ably immediately on page load — don't wait for useEffect.
+        // This eliminates the cold-start delay where the first message arrives
+        // before Ably has finished authenticating.
+        // Pre-connect Ably immediately with userId — eliminates cold-start delay
+        // and ensures fresh signup users can auth without a session cookie
+        try {
+          const ablyInstance = getAblyClient(currentUser.id)
+          if (ablyInstance.connection.state === 'initialized') {
+            ablyInstance.connect()
+          }
+        } catch {}
+
         const groupsRes = await fetch(`/api/groups?userId=${currentUser.id}`)
         if (groupsRes.ok) { const d = await groupsRes.json(); setGroups(d.groups || []) }
-        const dmRes = await fetch('/api/dm')
+        const dmRes = await fetch(`/api/dm?userId=${currentUser.id}`)
         let convs: DMConversation[] = []
         if (dmRes.ok) { const d = await dmRes.json(); convs = d.conversations || []; setDmConversations(convs) }
 
@@ -658,7 +671,11 @@ export default function HomePage() {
   // ─── Ably: PERSISTENT user channel (never unsubscribes on chat switch) ───
   useEffect(() => {
     if (!user) return
-    const ably = getAblyClient()
+    // Ensure Ably client is initialized with the correct user context.
+    // If the client is new (just created), configure authParams so the auth
+    // endpoint knows the userId even before the session cookie is set (fresh signup).
+    // Pass userId so auth endpoint always knows who is requesting
+    const ably = getAblyClient(user.id)
     const uch = ably.channels.get(`user-${user.id}`)
 
     uch.subscribe('new-dm-notification', (msg: Ably.Message) => {
@@ -666,6 +683,7 @@ export default function HomePage() {
       const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
       const dmChatId = `dm_${data.from.id}`
       if (!isCurrentDM && !mutedChatsRef.current.has(dmChatId)) playReceiveSound()
+      // Update sidebar conversation list
       setDmConversations(prev => {
         const idx = prev.findIndex(c => c.user.id === data.from.id)
         if (idx >= 0) {
@@ -675,6 +693,28 @@ export default function HomePage() {
         }
         return [{ user: data.from, lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: 1 }, ...prev]
       })
+      // If this DM is currently open, also subscribe the DM channel directly
+      // so the message appears instantly without waiting for the chat-specific effect
+      if (isCurrentDM && data.from.id) {
+        const dmCh = getAblyClient().channels.get(getDMChannelName(user.id, data.from.id))
+        // The chat-specific effect already handles new-message on this channel,
+        // but if there's a timing gap (channel not yet attached), fetch the latest
+        if (dmCh.state !== 'attached') {
+          setTimeout(() => {
+            fetch(`/api/dm?otherUserId=${data.from.id}`)
+              .then(r => r.json())
+              .then(d => {
+                if (d.messages?.length) {
+                  setDmMessages(prev => {
+                    const ids = new Set(prev.map((m: any) => m.id))
+                    const fresh = d.messages.filter((m: any) => !ids.has(m.id))
+                    return fresh.length ? [...prev, ...fresh] : prev
+                  })
+                }
+              }).catch(() => {})
+          }, 500)
+        }
+      }
     })
 
     // When admin approves a join request, fetch and add the group to sidebar live
@@ -718,7 +758,7 @@ export default function HomePage() {
   // ─── Ably: Chat-specific channels (group or DM) ───
   useEffect(() => {
     if (!user) return
-    const ably = getAblyClient()
+    const ably = getAblyClient(user.id)
     const channels: Ably.RealtimeChannel[] = []
 
     if (selectedChat) {
@@ -862,7 +902,7 @@ export default function HomePage() {
   // ── Connection health monitor — re-fetch missed messages on reconnect ──
   useEffect(() => {
     if (!user) return
-    const ably = getAblyClient()
+    const ably = getAblyClient(user.id)
 
     const handleConnected = () => {
       // When Ably reconnects after a drop, silently re-fetch to catch missed messages
@@ -908,7 +948,7 @@ export default function HomePage() {
   // ── Presence ──
   useEffect(() => {
     if (!user) return
-    const ably = getAblyClient()
+    const ably = getAblyClient(user.id)
     const presenceCh = ably.channels.get('presence-updates')
 
     presenceCh.subscribe('status-change', (msg: Ably.Message) => {
@@ -1046,12 +1086,34 @@ export default function HomePage() {
     setNewDMMessage(''); clearAttachments(); setShowInputEmoji(false); setShowGifPicker(false); setReplyingTo(null)
     if (inputRef.current) { inputRef.current.style.height = 'auto' }
     try {
-      const body: any = { content: savedMsg, receiverId: selectedDM.user.id }
+      const body: any = { content: savedMsg, receiverId: selectedDM.user.id, senderId: user.id }
       if (savedImg) body.imageUrl = savedImg
       if (savedFile) { body.fileUrl = savedFile.url; body.fileName = savedFile.name; body.fileType = savedFile.type }
       if (savedReply) body.replyToId = savedReply.id
       const res = await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      if (res.ok) { const data = await res.json(); setDmMessages(prev => prev.map(m => m.id === tempId ? data.message : m)) }
+      if (res.ok) {
+        const data = await res.json()
+        const sentMsg = data.message
+        setDmMessages(prev => prev.map(m => m.id === tempId ? sentMsg : m))
+        // Add to DM sidebar instantly if this is the first message (new conversation)
+        setDmConversations(prev => {
+          const exists = prev.some(c => c.user.id === selectedDM!.user.id)
+          if (exists) {
+            // Update last message preview
+            return prev.map(c => c.user.id === selectedDM!.user.id
+              ? { ...c, lastMessage: sentMsg.content || '📎 Attachment', lastMessageAt: sentMsg.createdAt }
+              : c
+            ).sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+          }
+          // Brand new conversation — add it to the top
+          return [{
+            user: selectedDM!.user,
+            lastMessage: sentMsg.content || '📎 Attachment',
+            lastMessageAt: sentMsg.createdAt,
+            unreadCount: 0,
+          }, ...prev]
+        })
+      }
       else { setDmMessages(prev => prev.filter(m => m.id !== tempId)) }
     } catch { setDmMessages(prev => prev.filter(m => m.id !== tempId)) }
   }
@@ -1094,11 +1156,23 @@ export default function HomePage() {
   }
   const handleDMReaction = async (messageId: string, emoji: string) => {
     if (!user || !selectedDM) return; setShowEmojiPicker(null)
-    try { const res = await fetch('/api/dm/reactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId, userId: user.id, emoji }) }); if (res.ok) loadDMMessages(selectedDM.user.id) } catch {}
+    try {
+      const res = await fetch('/api/dm/reactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId, userId: user.id, emoji }) })
+      if (res.ok) {
+        const data = await res.json()
+        // Update state directly — no full reload needed
+        if (data.reactions) {
+          setDmMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions: data.reactions } : m))
+          // Also broadcast via Ably so the other user sees it live
+          const channel = getDMChannelName(user.id, selectedDM.user.id)
+          // The API already publishes via Ably, so no client-side publish needed
+        }
+      }
+    } catch {}
   }
   const loadDMMessages = async (otherUserId: string) => {
     if (!user) return; setIsLoadingMessages(true)
-    try { const res = await fetch(`/api/dm?otherUserId=${otherUserId}`); if (res.ok) { const d = await res.json(); setDmMessages(d.messages || []) } }
+    try { const res = await fetch(`/api/dm?otherUserId=${otherUserId}&userId=${user.id}`); if (res.ok) { const d = await res.json(); setDmMessages(d.messages || []) } }
     catch (err) { console.error('Error:', err) }
     finally { setIsLoadingMessages(false) }
   }
@@ -1127,11 +1201,12 @@ export default function HomePage() {
   useEffect(() => { if (showPingModal) { const t = setTimeout(() => loadPingClassmates(pingSearchQuery), 300); return () => clearTimeout(t) } }, [pingSearchQuery, showPingModal])
 
   const handleLogout = () => setShowLogoutModal(true)
-const confirmLogout = () => {
-  localStorage.removeItem('user')
-  try { getAblyClient().close() } catch {}
-  router.push('/auth')
-}
+  const confirmLogout = () => {
+    localStorage.removeItem('user')
+    // Close Ably connection on logout so next login gets a fresh client
+    try { getAblyClient().close() } catch {}
+    router.push('/auth')
+  }
   const filteredGroups = getSortedGroups(groups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()) || g.description?.toLowerCase().includes(searchQuery.toLowerCase())))
   const filteredDMs = dmConversations.filter(c => `${c.user.firstName} ${c.user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()))
   const totalUnread = dmConversations.reduce((s, c) => s + c.unreadCount, 0)
@@ -1298,17 +1373,34 @@ const confirmLogout = () => {
       const joinCodeMatch = part.match(/joinCode=([a-z0-9]+)/i)
       if (isInviteLink && joinCodeMatch) {
         return (
-          <button
+          <div
             key={i}
-            onClick={(e) => {
-              e.stopPropagation()
-              setJoinCode(joinCodeMatch[1])
-              setShowJoinModal(true)
-            }}
-            className={`inline-flex items-center gap-1 underline font-semibold rounded px-0.5 transition-all ${isOwn ? 'text-indigo-100 hover:text-white' : 'text-indigo-600 hover:text-indigo-800'}`}
+            className={`my-1 rounded-xl overflow-hidden border ${isOwn ? 'border-white/20' : 'border-indigo-100'}`}
+            style={isOwn
+              ? { background: 'rgba(255,255,255,0.12)' }
+              : { background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%)' }
+            }
           >
-            🔗 Join Group
-          </button>
+            <div className="px-3 py-2.5 flex items-center gap-2.5">
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isOwn ? 'bg-white/20' : 'bg-indigo-100'}`}>
+                <span className="text-base">👥</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-[11px] font-semibold uppercase tracking-wide mb-0.5 ${isOwn ? 'text-indigo-200' : 'text-indigo-400'}`}>Group Invite</p>
+                <p className={`text-[12px] leading-tight ${isOwn ? 'text-white/80' : 'text-gray-600'}`}>You've been invited to join a group</p>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setJoinCode(joinCodeMatch[1])
+                  setShowJoinModal(true)
+                }}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-all ${isOwn ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+              >
+                Join
+              </button>
+            </div>
+          </div>
         )
       }
       // Regular external URL
@@ -1328,8 +1420,16 @@ const confirmLogout = () => {
   }
 
   const renderMsgBubble = (msg: any, idx: number, allMsgs: any[], isDM: boolean) => {
-    // System messages ("xyz joined/left") rendered as centered pill
-    if (msg.isSystemMessage) {
+    // System messages ("xyz joined/left/was approved") rendered as centered pill
+    // isSystemMessage covers real-time Ably messages; content pattern covers DB-loaded ones
+    const isSystemMsg = msg.isSystemMessage ||
+      (typeof msg.content === 'string' && !msg.imageUrl && !msg.fileUrl && (
+        msg.content.endsWith(' joined the group') ||
+        msg.content.endsWith(' left the group') ||
+        msg.content.endsWith(' was added to the group') ||
+        msg.content.endsWith(' was removed from the group')
+      ))
+    if (isSystemMsg) {
       return (
         <div key={msg.id} className="flex justify-center my-3">
           <span className="text-[11px] text-gray-500 px-4 py-1 rounded-full" style={{background:'rgba(255,255,255,0.55)', backdropFilter:'blur(8px)', border:'1px solid rgba(255,255,255,0.6)'}}>{msg.content}</span>

@@ -34,7 +34,7 @@ const GRAD_STANDINGS = ['Junior', 'Senior', 'Alumni']
 
 // ─── Compress image via canvas before upload ─────────────────────
 // Fixes silent failures caused by large base64 payloads exceeding API body limits
-function compressImage(file: File, maxWidth = 800, quality = 0.85): Promise<string> {
+function compressImage(file: File | Blob, maxWidth = 800, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -330,8 +330,26 @@ export default function ProfilePage() {
     setImageUploadError(null)
 
     try {
-      // Compress to max 400px wide, quality 0.82 — keeps payload well under 500KB
-      const compressed = await compressImage(file, 800, 0.85)
+      // Convert HEIC/HEIF (iPhone default format) to JPEG before compressing
+      // Uses heic2any library — install with: npm install heic2any
+      const isHEIC = file.type === 'image/heic' || file.type === 'image/heif'
+        || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')
+
+      let fileToCompress: File | Blob = file
+      if (isHEIC) {
+        try {
+          const heic2any = (await import('heic2any')).default
+          const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+          fileToCompress = Array.isArray(converted) ? converted[0] : converted
+        } catch {
+          setImageUploadError("Couldn't convert this iPhone photo. Try sharing it as JPG from your Photos app first.")
+          setIsUploadingImage(false)
+          return
+        }
+      }
+
+      // Compress to max 800px, quality 0.85 — supports jpg/png/webp/gif/bmp/avif/heic
+      const compressed = await compressImage(fileToCompress as File, 800, 0.85)
 
       const res = await fetch('/api/profile', {
         method: 'PUT',

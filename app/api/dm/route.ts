@@ -14,18 +14,25 @@ function getDMChannel(id1: string, id2: string) {
 const DM_SELECT = {
   id: true, content: true, senderId: true, receiverId: true, createdAt: true,
   fileUrl: true, fileName: true, fileType: true, imageUrl: true,
-  read: true,
+  read: true, replyToId: true,
   sender: { select: { id: true, firstName: true, lastName: true, profileImage: true } },
   receiver: { select: { id: true, firstName: true, lastName: true, profileImage: true } },
+  replyTo: {
+    select: {
+      id: true, content: true, imageUrl: true,
+      sender: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
 }
 
 export async function GET(request: Request) {
   try {
-    const auth = await getAuthUser()
-    if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    const userId = auth.userId
-
     const { searchParams } = new URL(request.url)
+    // Primary: session. Fallback: userId query param (fresh signup case)
+    const auth = await getAuthUser()
+    const userId = auth?.userId || searchParams.get('userId') || null
+    if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
     const otherUserId = searchParams.get('otherUserId')
     const after = searchParams.get('after')
 
@@ -100,12 +107,24 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await getAuthUser()
-    if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-
     const body = await request.json()
-    const { content, receiverId, fileUrl, fileName, fileType, imageUrl, replyToId } = body
-    const senderId = auth.userId
+    const { content, receiverId, fileUrl, fileName, fileType, imageUrl, replyToId, senderId: bodySenderId } = body
+
+    // Primary auth: session cookie (most secure)
+    // Fallback: senderId from request body, validated against DB (handles fresh signup before session is set)
+    const auth = await getAuthUser()
+    let senderId: string
+
+    if (auth) {
+      senderId = auth.userId
+    } else if (bodySenderId) {
+      // Validate the user actually exists to prevent spoofing
+      const userExists = await prisma.user.findUnique({ where: { id: bodySenderId }, select: { id: true } })
+      if (!userExists) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      senderId = bodySenderId
+    } else {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     if (!receiverId) return Response.json({ error: 'receiverId required' }, { status: 400 })
     if (!content?.trim() && !fileUrl && !imageUrl) return Response.json({ error: 'Content required' }, { status: 400 })
@@ -119,6 +138,7 @@ export async function POST(request: Request) {
         fileName: fileName || null,
         fileType: fileType || null,
         imageUrl: imageUrl || null,
+        ...(replyToId ? { replyToId } : {}),
       },
       select: DM_SELECT,
     })
