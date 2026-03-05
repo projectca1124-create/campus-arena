@@ -26,9 +26,9 @@ export function getAblyClient(userId?: string): Ably.Realtime {
   ablyClient = new Ably.Realtime({
     authUrl: '/api/ably/auth',
     authMethod: 'POST',
-    // Pass userId in every auth request body — critical for fresh signup users
-    // who don't have a session cookie yet
-    authParams: ablyUserId ? { clientId: ablyUserId } : undefined,
+    // Pass userId as a custom header — more reliable than authParams
+    // (authParams are sent form-encoded which can be tricky to parse)
+    authHeaders: ablyUserId ? { 'x-user-id': ablyUserId } : undefined,
     // Don't echo messages back to publisher (eliminates double-processing)
     echoMessages: false,
     // Don't queue messages while connecting — prevents stale backlog

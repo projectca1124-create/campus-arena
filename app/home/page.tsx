@@ -648,7 +648,7 @@ export default function HomePage() {
             if (existing) {
               setSelectedDM(existing); setSelectedChat(null)
               // Load existing messages — was missing, caused empty chat on Connect
-              const dmRes2 = await fetch(`/api/dm?otherUserId=${existing.user.id}`)
+              const dmRes2 = await fetch(`/api/dm?otherUserId=${existing.user.id}&userId=${currentUser.id}`)
               if (dmRes2.ok) { const d = await dmRes2.json(); setDmMessages(d.messages || []) }
               // Mark as read
               setDmConversations(prev => prev.map(conv =>

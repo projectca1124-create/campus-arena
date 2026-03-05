@@ -2,7 +2,6 @@
 import { PrismaClient } from '@prisma/client'
 import { publishEvent } from '@/lib/ably-server'
 import { notifyDM } from '@/lib/notifications'
-import { getAuthUser } from '@/lib/auth'
 
 const prisma = new PrismaClient()
 
@@ -29,8 +28,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     // Primary: session. Fallback: userId query param (fresh signup case)
-    const auth = await getAuthUser()
-    const userId = auth?.userId || searchParams.get('userId') || null
+    const userId = searchParams.get('userId') || null
     if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
     const otherUserId = searchParams.get('otherUserId')
@@ -110,21 +108,11 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { content, receiverId, fileUrl, fileName, fileType, imageUrl, replyToId, senderId: bodySenderId } = body
 
-    // Primary auth: session cookie (most secure)
-    // Fallback: senderId from request body, validated against DB (handles fresh signup before session is set)
-    const auth = await getAuthUser()
-    let senderId: string
-
-    if (auth) {
-      senderId = auth.userId
-    } else if (bodySenderId) {
-      // Validate the user actually exists to prevent spoofing
-      const userExists = await prisma.user.findUnique({ where: { id: bodySenderId }, select: { id: true } })
-      if (!userExists) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-      senderId = bodySenderId
-    } else {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // Auth: senderId from request body, validated against DB
+    if (!bodySenderId) return Response.json({ error: 'senderId required' }, { status: 400 })
+    const userExists = await prisma.user.findUnique({ where: { id: bodySenderId }, select: { id: true } })
+    if (!userExists) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const senderId = bodySenderId
 
     if (!receiverId) return Response.json({ error: 'receiverId required' }, { status: 400 })
     if (!content?.trim() && !fileUrl && !imageUrl) return Response.json({ error: 'Content required' }, { status: 400 })

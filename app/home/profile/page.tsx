@@ -40,16 +40,35 @@ function compressImage(file: File | Blob, maxWidth = 800, quality = 0.85): Promi
     reader.onload = (e) => {
       const img = new Image()
       img.onload = () => {
+        // For very large images, cap canvas size to avoid memory crashes
+        // Max canvas dimension ~4096px which all browsers support safely
+        const MAX_DIMENSION = 4096
+        const scaleByWidth = maxWidth / img.width
+        const scaleByMaxDim = Math.min(MAX_DIMENSION / img.width, MAX_DIMENSION / img.height)
+        const scale = Math.min(1, scaleByWidth, scaleByMaxDim)
+
         const canvas = document.createElement('canvas')
-        const scale = Math.min(1, maxWidth / img.width)
-        canvas.width = img.width * scale
-        canvas.height = img.height * scale
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
         const ctx = canvas.getContext('2d')
         if (!ctx) { reject(new Error('Canvas not supported')); return }
+        // White background for transparent PNGs/WebPs converted to JPEG
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-        resolve(canvas.toDataURL('image/jpeg', quality))
+
+        // Try requested quality first; if output is still too large, reduce quality
+        let dataUrl = canvas.toDataURL('image/jpeg', quality)
+        // If still > 1.5MB base64 (~1.1MB actual), compress harder
+        if (dataUrl.length > 1.5 * 1024 * 1024 * 1.37) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.7)
+        }
+        if (dataUrl.length > 1.5 * 1024 * 1024 * 1.37) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.5)
+        }
+        resolve(dataUrl)
       }
-      img.onerror = reject
+      img.onerror = () => reject(new Error('Failed to load image'))
       img.src = e.target?.result as string
     }
     reader.onerror = reject
@@ -322,20 +341,18 @@ export default function ProfilePage() {
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
-
-    // Reset input so same file can be re-selected if needed
     e.target.value = ''
 
     setIsUploadingImage(true)
     setImageUploadError(null)
 
     try {
-      // Convert HEIC/HEIF (iPhone default format) to JPEG before compressing
-      // Uses heic2any library — install with: npm install heic2any
+      let fileToCompress: File | Blob = file
+
+      // ── HEIC/HEIF (iPhone default) — convert to JPEG first ──
       const isHEIC = file.type === 'image/heic' || file.type === 'image/heif'
         || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')
 
-      let fileToCompress: File | Blob = file
       if (isHEIC) {
         try {
           const heic2any = (await import('heic2any')).default
@@ -343,13 +360,13 @@ export default function ProfilePage() {
           fileToCompress = Array.isArray(converted) ? converted[0] : converted
         } catch {
           setImageUploadError("Couldn't convert this iPhone photo. Try sharing it as JPG from your Photos app first.")
-          setIsUploadingImage(false)
           return
         }
       }
 
-      // Compress to max 800px, quality 0.85 — supports jpg/png/webp/gif/bmp/avif/heic
-      const compressed = await compressImage(fileToCompress as File, 800, 0.85)
+      // ── Compress: handles jpg/png/webp/gif/bmp/avif/svg + any file size ──
+      // maxWidth 800px, auto-reduces quality if result is too large
+      const compressed = await compressImage(fileToCompress, 800, 0.85)
 
       const res = await fetch('/api/profile', {
         method: 'PUT',
@@ -359,18 +376,17 @@ export default function ProfilePage() {
 
       if (res.ok) {
         const data = await res.json()
-        // Update both local state and localStorage
         setUser(prev => prev ? { ...prev, profileImage: data.user.profileImage } : prev)
         const stored = JSON.parse(localStorage.getItem('user') || '{}')
         localStorage.setItem('user', JSON.stringify({ ...stored, profileImage: data.user.profileImage }))
+        window.dispatchEvent(new Event('userUpdated'))
       } else {
-        const errData = await res.json().catch(() => ({}))
-        setImageUploadError(errData.error || 'Upload failed. Please try again.')
-        console.error('Profile image upload failed:', errData)
+        const data = await res.json().catch(() => ({}))
+        setImageUploadError(data.error || 'Upload failed. Please try again.')
       }
     } catch (err) {
       console.error('Image upload error:', err)
-      setImageUploadError('Something went wrong. Please try again.')
+      setImageUploadError('Something went wrong. Please try a different image.')
     } finally {
       setIsUploadingImage(false)
     }

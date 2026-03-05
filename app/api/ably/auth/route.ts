@@ -10,12 +10,34 @@ export async function POST(request: Request) {
     let userId: string | undefined = auth?.userId
 
     if (!userId) {
-      // Ably SDK sends the clientId hint in the POST body when using authUrl
-      try {
-        const body = await request.json().catch(() => ({}))
-        // Accept clientId from body (set via ably.auth.authParams on the client)
-        if (body?.clientId) userId = body.clientId
-      } catch {}
+      // Try multiple fallback methods to get userId (for fresh signup users without session):
+
+      // 1. Custom header (most reliable — set via authHeaders in ably-client.ts)
+      const headerUserId = request.headers.get('x-user-id')
+      if (headerUserId) userId = headerUserId
+
+      // 2. Form-encoded body (Ably sends authParams this way when authMethod='POST')
+      if (!userId) {
+        try {
+          const contentType = request.headers.get('content-type') || ''
+          if (contentType.includes('application/x-www-form-urlencoded')) {
+            const text = await request.text()
+            const params = new URLSearchParams(text)
+            if (params.get('clientId')) userId = params.get('clientId')!
+          } else {
+            const cloned = request.clone()
+            const body = await cloned.json().catch(() => ({}))
+            if (body?.clientId) userId = body.clientId
+          }
+        } catch {}
+      }
+
+      // 3. URL query string fallback
+      if (!userId) {
+        const url = new URL(request.url)
+        const qp = url.searchParams.get('clientId')
+        if (qp) userId = qp
+      }
     }
 
     if (!userId) {
