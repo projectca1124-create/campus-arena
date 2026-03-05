@@ -1,6 +1,7 @@
 // app/api/messages/route.ts — ABLY VERSION
 import { PrismaClient } from '@prisma/client'
 import { publishEvent } from '@/lib/ably-server'
+import { notifyGroupMessage } from '@/lib/notifications'
 
 const prisma = new PrismaClient()
 
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     // Broadcast to group channel (all open clients see it instantly)
     await publishEvent(`group-${groupId}`, 'new-message', { message })
 
-    // Notify all other group members on their personal channels
+    // Notify all other group members — DB notification (bell) + real-time Ably ping
     const group = await prisma.group.findUnique({
       where: { id: groupId },
       select: {
@@ -75,18 +76,23 @@ export async function POST(request: Request) {
     })
 
     if (group) {
-      const notifyPromises = group.members
-        .filter(m => m.userId !== userId)
-        .map(m =>
-          publishEvent(`user-${m.userId}`, 'new-group-notification', {
-            groupId,
-            groupName: group.name,
-            from: message.user,
-            preview: content?.substring(0, 60) || '📎 Attachment',
-            messageId: message.id,
-            timestamp: message.createdAt,
-          })
-        )
+      const otherMembers = group.members.filter(m => m.userId !== userId)
+      const otherMemberIds = otherMembers.map(m => m.userId)
+      const senderName = `${message.user.firstName} ${message.user.lastName}`
+      const preview = content?.substring(0, 60) || '📎 Attachment'
+      // Persist in DB so bell shows it (this was missing — fixing group notification bug)
+      notifyGroupMessage(otherMemberIds, senderName, group.name, groupId, preview).catch(() => {})
+      // Real-time ping for instant badge update
+      const notifyPromises = otherMembers.map(m =>
+        publishEvent(`user-${m.userId}`, 'new-group-notification', {
+          groupId,
+          groupName: group.name,
+          from: message.user,
+          preview,
+          messageId: message.id,
+          timestamp: message.createdAt,
+        })
+      )
       await Promise.all(notifyPromises)
     }
 

@@ -124,14 +124,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         message: { ...joinMsg, isSystemMessage: true },
       }).catch(() => {})
 
-      // Notify the requester they were approved
+      // Notify the requester they were approved — link opens the group directly
       await createNotification({
         userId: requesterId,
         type: 'group',
         title: '✅ Request Approved',
-        body: `You've been approved to join "${group?.name}"!`,
-        link: `/home`,
+        body: `You've been approved to join "${group?.name}"! Tap to open the group.`,
+        link: `/home?groupId=${groupId}`,
       })
+
+      // Also push the new group to the approved user's sidebar via Ably
+      await publishEvent(`user-${requesterId}`, 'group-approved', {
+        groupId,
+        groupName: group?.name,
+      }).catch(() => {})
 
       // Fetch updated group to return to admin UI
       const updatedGroup = await prisma.group.findUnique({

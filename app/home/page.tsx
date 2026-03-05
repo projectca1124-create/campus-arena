@@ -16,7 +16,7 @@ import {
   BellOff, BellRing, VolumeX, Reply, Sticker, ChevronDown,
   Forward, Pencil, Trash2, Copy, Check, CheckCheck,
   Pin, PinOff, Link2, Share2, Lock, Globe, Shield, UserPlus,
-  Menu, ChevronLeft,
+  Menu, ChevronLeft, Camera,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -156,6 +156,7 @@ export default function HomePage() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const [user, setUser] = useState<User | null>(null)
@@ -174,7 +175,8 @@ export default function HomePage() {
   const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false)
   const [showLeaveGroupModal, setShowLeaveGroupModal] = useState(false)
   const [isDeletingGroup, setIsDeletingGroup] = useState(false)
-  const [groupForm, setGroupForm] = useState({ name: '', description: '', visibility: 'public' as 'public' | 'private' })
+  const [groupForm, setGroupForm] = useState({ name: '', description: '', visibility: 'public' as 'public' | 'private', icon: '' })
+  const groupImageInputRef = useRef<HTMLInputElement>(null)
   const [groupErrors, setGroupErrors] = useState<Record<string, string>>({})
   const [isCreating, setIsCreating] = useState(false)
 
@@ -191,6 +193,7 @@ export default function HomePage() {
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
   const [showInputEmoji, setShowInputEmoji] = useState(false)
   const [showGifPicker, setShowGifPicker] = useState(false)
+  const [isUploadingGroupAvatar, setIsUploadingGroupAvatar] = useState(false)
 
   const [showGroupInfo, setShowGroupInfo] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
@@ -223,6 +226,7 @@ export default function HomePage() {
   const [joinCode, setJoinCode] = useState('')
   const [joinError, setJoinError] = useState('')
   const [isJoining, setIsJoining] = useState(false)
+  const [pendingApproval, setPendingApproval] = useState<{ groupName: string } | null>(null)
 
   const [typingUsers, setTypingUsers] = useState<Record<string, { name: string; timeout: NodeJS.Timeout }>>({})
 
@@ -285,7 +289,17 @@ export default function HomePage() {
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior })
   }, [])
-  useEffect(() => { scrollToBottom(); if (selectedChat && messages.length > 0) markGroupRead(selectedChat.id) }, [messages, dmMessages])
+  // Scroll to bottom on new messages. Use 'instant' on initial load so the
+  // chat opens AT the last message rather than animating up from the top.
+  const isInitialLoadRef = useRef(true)
+  useEffect(() => {
+    if (messages.length > 0 || dmMessages.length > 0) {
+      // instant jump on first load of a conversation, smooth for subsequent messages
+      scrollToBottom(isInitialLoadRef.current ? 'instant' : 'smooth')
+      isInitialLoadRef.current = false
+    }
+    if (selectedChat && messages.length > 0) markGroupRead(selectedChat.id)
+  }, [messages, dmMessages])
 
   const handleScroll = useCallback(() => {
     const el = messagesContainerRef.current
@@ -389,6 +403,57 @@ export default function HomePage() {
     } catch (err) { console.error('Leave group error:', err) }
   }
 
+  // ── Upload group avatar (admin only, non-default groups) ──
+  const handleGroupAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !selectedChat || !user) return
+    e.target.value = ''
+    if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5MB'); return }
+    setIsUploadingGroupAvatar(true)
+    try {
+      // Compress via canvas before upload
+      const compressed = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (ev) => {
+          const img = new Image()
+          img.onload = () => {
+            const canvas = document.createElement('canvas')
+            const scale = Math.min(1, 300 / img.width)
+            canvas.width = img.width * scale
+            canvas.height = img.height * scale
+            const ctx = canvas.getContext('2d')
+            if (!ctx) { reject(new Error('Canvas not supported')); return }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            resolve(canvas.toDataURL('image/jpeg', 0.82))
+          }
+          img.onerror = reject
+          img.src = ev.target?.result as string
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const res = await fetch(`/api/groups/${selectedChat.id}/avatar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, icon: compressed }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const updatedIcon = data.group?.icon || compressed
+        setGroups(prev => prev.map(g => g.id === selectedChat.id ? { ...g, icon: updatedIcon } : g))
+        setSelectedChat(prev => prev ? { ...prev, icon: updatedIcon } : prev)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Failed to update group avatar')
+      }
+    } catch (err) {
+      console.error('Group avatar upload error:', err)
+      alert('Something went wrong. Please try again.')
+    } finally {
+      setIsUploadingGroupAvatar(false)
+    }
+  }
+
   const handleLoadJoinRequests = async (groupId: string) => {
     if (!user) return
     try {
@@ -427,6 +492,14 @@ export default function HomePage() {
       const d = await res.json()
       if (!res.ok) { setJoinError(d.error || 'Failed to join group'); return }
       if (d.alreadyMember) { setJoinError("You're already a member of this group!"); return }
+      // Private group — request sent, waiting for admin approval
+      if (d.pending) {
+        setShowJoinModal(false)
+        setJoinCode('')
+        setPendingApproval({ groupName: d.groupName })
+        return
+      }
+      // Public group — instant join
       setGroups(p => [...p, d.group]); setShowJoinModal(false); setJoinCode(''); handleSelectChat(d.group)
     } catch { setJoinError('Something went wrong.') }
     finally { setIsJoining(false) }
@@ -460,9 +533,21 @@ export default function HomePage() {
           const params = new URLSearchParams(window.location.search)
           const joinCodeParam = params.get('joinCode')
           if (joinCodeParam) { setJoinCode(joinCodeParam); setShowJoinModal(true); window.history.replaceState({}, '', '/home') }
-          // Handle join-request notification click: ?groupId=X&approveUser=Y
+          // Handle group message notification click: ?groupId=X (no approveUser)
           const groupIdParam = params.get('groupId')
           const approveUserParam = params.get('approveUser')
+          if (groupIdParam && !approveUserParam) {
+            window.history.replaceState({}, '', '/home')
+            setTimeout(() => {
+              setGroups(prev => {
+                const g = prev.find(g => g.id === groupIdParam)
+                if (g) { setSelectedChat(g); setSelectedDM(null); loadMessages(g.id) }
+                return prev
+              })
+            }, 300)
+          }
+
+          // Handle join-request notification click: ?groupId=X&approveUser=Y
           if (groupIdParam && approveUserParam) {
             window.history.replaceState({}, '', '/home')
             // Wait briefly for groups to load then open join requests
@@ -547,6 +632,27 @@ export default function HomePage() {
         }
         return [{ user: data.from, lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: 1 }, ...prev]
       })
+    })
+
+    // When admin approves a join request, fetch and add the group to sidebar live
+    uch.subscribe('group-approved', (msg: Ably.Message) => {
+      const data = msg.data as { groupId: string; groupName: string }
+      // Fetch full group data and add to sidebar
+      const userStr = localStorage.getItem('user')
+      if (!userStr) return
+      const u = JSON.parse(userStr)
+      fetch(`/api/groups?userId=${u.id}`)
+        .then(r => r.json())
+        .then(d => {
+          const newGroup = (d.groups || []).find((g: Group) => g.id === data.groupId)
+          if (newGroup) {
+            setGroups(prev => {
+              if (prev.some(g => g.id === newGroup.id)) return prev
+              return [...prev, newGroup]
+            })
+          }
+        })
+        .catch(() => {})
     })
 
     uch.subscribe('new-group-notification', (msg: Ably.Message) => {
@@ -876,13 +982,14 @@ export default function HomePage() {
     setIsCreating(true)
     try {
       const res = await fetch('/api/groups/create', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: groupForm.name, description: groupForm.description, userId: user?.id, visibility: groupForm.visibility }) })
-      if (res.ok) { const d = await res.json(); setGroups(p => [...p, d.group]); setShowCreateGroup(false); setGroupForm({ name: '', description: '', visibility: 'public' }); setGroupErrors({}) }
+        body: JSON.stringify({ name: groupForm.name, description: groupForm.description, userId: user?.id, visibility: groupForm.visibility, icon: groupForm.icon || undefined }) })
+      if (res.ok) { const d = await res.json(); setGroups(p => [...p, d.group]); setShowCreateGroup(false); setGroupForm({ name: '', description: '', visibility: 'public', icon: '' }); setGroupErrors({}) }
     } catch (err) { console.error('Error:', err) }
     finally { setIsCreating(false) }
   }
 
   const handleSelectChat = (group: Group) => {
+    isInitialLoadRef.current = true   // reset so next load scrolls instantly
     setSelectedChat(group); setSelectedDM(null); setShowGroupInfo(false); clearAttachments()
     setShowInputEmoji(false); setShowGifPicker(false); setShowHeaderMenu(false); setReplyingTo(null)
     markGroupRead(group.id); loadMessages(group.id)
@@ -903,6 +1010,7 @@ export default function HomePage() {
     finally { setIsLoadingMessages(false) }
   }
   const handleSelectDM = (conv: DMConversation) => {
+    isInitialLoadRef.current = true   // reset so next load scrolls instantly
     setSelectedDM(conv); setSelectedChat(null); setShowGroupInfo(false); clearAttachments()
     setShowInputEmoji(false); setShowGifPicker(false); setShowHeaderMenu(false); setReplyingTo(null)
     loadDMMessages(conv.user.id)
@@ -936,7 +1044,12 @@ export default function HomePage() {
     for (const r of reactions) { if (!map[r.emoji]) map[r.emoji] = { count: 0, userReacted: false }; map[r.emoji].count++; if (r.userId === user?.id) map[r.emoji].userReacted = true }
     return map
   }
-  const insertEmoji = (emoji: string) => { if (selectedChat) setNewMessage(p => p + emoji); else if (selectedDM) setNewDMMessage(p => p + emoji) }
+  const insertEmoji = (emoji: string) => {
+    if (selectedChat) setNewMessage(p => p + emoji)
+    else if (selectedDM) setNewDMMessage(p => p + emoji)
+    // Keep focus on input so user can keep typing after selecting emoji
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
   const getGroupMembers = () => {
     if (!selectedChat) return []; let members = selectedChat.members || []
     if (memberSearch) { const q = memberSearch.toLowerCase(); members = members.filter(m => `${m.user.firstName} ${m.user.lastName}`.toLowerCase().includes(q) || m.user.major?.toLowerCase().includes(q)) }
@@ -1016,23 +1129,57 @@ export default function HomePage() {
 
   const renderReplyPreview = (replyTo: ReplyTo | null | undefined, isOwn: boolean) => {
     if (!replyTo) return null
-    const replyName = replyTo.user ? `${replyTo.user.firstName} ${replyTo.user.lastName}` : replyTo.sender ? `${replyTo.sender.firstName} ${replyTo.sender.lastName}` : 'Unknown'
+    const replyName = replyTo.user
+      ? `${replyTo.user.firstName} ${replyTo.user.lastName}`
+      : replyTo.sender
+        ? `${replyTo.sender.firstName} ${replyTo.sender.lastName}`
+        : 'Unknown'
+
+    // True WhatsApp style:
+    // - Visually distinct quoted block separated from the actual message
+    // - Left colored accent bar
+    // - Sender name in accent color (green in WA, indigo here)
+    // - Quoted text in muted color, 2 lines max
+    // - Thumbnail on right if quoted msg had an image
+    // - Slight background to differentiate from the bubble itself
     return (
       <div
-        className="flex items-stretch mb-2 rounded-lg overflow-hidden cursor-pointer"
-        style={{ background: isOwn ? 'rgba(255,255,255,0.15)' : 'rgba(99,102,241,0.08)', borderLeft: '3px solid', borderLeftColor: isOwn ? 'rgba(255,255,255,0.6)' : '#6366f1' }}
+        className="flex items-stretch mb-2 rounded-[10px] overflow-hidden"
+        style={{
+          background: isOwn ? 'rgba(255,255,255,0.12)' : 'rgba(99,102,241,0.06)',
+          borderLeft: `3px solid ${isOwn ? 'rgba(255,255,255,0.75)' : '#6366f1'}`,
+        }}
       >
-        <div className="px-2.5 py-1.5 flex-1 min-w-0">
-          <p className={`text-[11px] font-bold mb-0.5 ${isOwn ? 'text-white/80' : 'text-indigo-600'}`}>{replyName}</p>
-          {replyTo.imageUrl && !replyTo.content && (
-            <p className={`text-[11px] flex items-center gap-1 ${isOwn ? 'text-white/60' : 'text-gray-500'}`}>📷 Photo</p>
-          )}
-          {replyTo.content && (
-            <p className={`text-[11px] line-clamp-2 ${isOwn ? 'text-white/70' : 'text-gray-500'}`}>{replyTo.content}</p>
-          )}
+        <div className="px-2.5 py-1.5 flex-1 min-w-0 overflow-hidden">
+          <p
+            className="text-[11px] font-bold leading-tight mb-0.5 truncate"
+            style={{ color: isOwn ? 'rgba(255,255,255,0.95)' : '#6366f1' }}
+          >
+            {replyName}
+          </p>
+          {replyTo.imageUrl && !replyTo.content ? (
+            <p
+              className="text-[11px] flex items-center gap-1"
+              style={{ color: isOwn ? 'rgba(255,255,255,0.55)' : '#9ca3af' }}
+            >
+              📷 Photo
+            </p>
+          ) : replyTo.content ? (
+            <p
+              className="text-[11px] leading-snug line-clamp-2"
+              style={{ color: isOwn ? 'rgba(255,255,255,0.6)' : '#6b7280' }}
+            >
+              {replyTo.content}
+            </p>
+          ) : null}
         </div>
         {replyTo.imageUrl && (
-          <img src={replyTo.imageUrl} alt="" className="w-10 h-10 object-cover flex-shrink-0 rounded-r-lg" />
+          <img
+            src={replyTo.imageUrl}
+            alt=""
+            className="flex-shrink-0 object-cover"
+            style={{ width: 46, height: 46 }}
+          />
         )}
       </div>
     )
@@ -1189,6 +1336,7 @@ export default function HomePage() {
       onClick={() => { initSounds(); setShowEmojiPicker(null); setShowInputEmoji(false); setSidebarMenuId(null); setMessageActionId(null) }}>
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
       <input ref={imageInputRef} type="file" className="hidden" onChange={handleImageSelect} accept="image/*" />
+      <input ref={groupAvatarInputRef} type="file" className="hidden" onChange={handleGroupAvatarUpload} accept="image/*" />
 
       {/* ── MOBILE TOP BAR — shown only on mobile when not in chat view ── */}
       {isMobile && mobileView !== 'chat' && (
@@ -1275,8 +1423,10 @@ export default function HomePage() {
                     <div key={group.id} className="relative group/item" data-sidebar-menu>
                       <button onClick={() => handleSelectChatMobile(group)} className={`w-full text-left p-3 rounded-xl transition-all flex items-center gap-3 ${isSel ? 'shadow-lg shadow-indigo-600/10' : 'hover:bg-gray-50'}`}
                         style={isSel ? { background: '#4f46e5' } : {}}>
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black tracking-tight ${isSel ? 'bg-white/60' : 'bg-indigo-50'}`}>
-                          {isDef ? (
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black tracking-tight overflow-hidden ${isSel ? 'bg-white/60' : 'bg-indigo-50'}`}>
+                          {group.icon ? (
+                            <img src={group.icon} alt={group.name} className="w-full h-full object-cover rounded-xl" />
+                          ) : isDef ? (
                             <span className={isSel ? 'text-indigo-700' : 'text-indigo-600'}>
                               {getGroupAbbr(group)}
                             </span>
@@ -1398,8 +1548,10 @@ export default function HomePage() {
               </button>
             )}
             {isGroupMode && selectedChat && (<>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-black tracking-tight text-white" style={{ background: '#4f46e5' }}>
-                {selectedChat.isDefault ? (
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-black tracking-tight text-white flex-shrink-0 overflow-hidden" style={{ background: '#4f46e5' }}>
+                {selectedChat.icon ? (
+                  <img src={selectedChat.icon} alt={selectedChat.name} className="w-full h-full object-cover" />
+                ) : selectedChat.isDefault ? (
                   <span>{getGroupAbbr(selectedChat)}</span>
                 ) : selectedChat.visibility === 'private' ? (
                   <Lock className="w-5 h-5 text-white" />
@@ -1524,8 +1676,16 @@ export default function HomePage() {
                     <div className="flex items-center gap-0.5">
                       <div className="relative"><button type="button" onClick={e => { e.stopPropagation(); setShowGifPicker(!showGifPicker); setShowInputEmoji(false) }} className={`p-2 rounded-xl transition-all ${showGifPicker ? 'text-indigo-500 bg-indigo-600/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}><Sticker className="w-[18px] h-[18px]" /></button>{showGifPicker && <GifPicker onSelect={handleGifSelect} onClose={() => setShowGifPicker(false)} />}</div>
                       <div className="relative"><button type="button" onClick={e => { e.stopPropagation(); setShowInputEmoji(!showInputEmoji); setShowGifPicker(false) }} className={`p-2 rounded-xl transition-all ${showInputEmoji ? 'text-indigo-500 bg-indigo-600/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}><Smile className="w-[18px] h-[18px]" /></button>{showInputEmoji && (
-                        <div onClick={e => e.stopPropagation()}>
-                          <EmojiKeyboard onSelect={(emoji) => { insertEmoji(emoji) }} onClose={() => setShowInputEmoji(false)} />
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          onMouseDown={e => e.preventDefault()}
+                        >
+                          <EmojiKeyboard
+                            onSelect={(emoji) => {
+                              insertEmoji(emoji)
+                            }}
+                            onClose={() => setShowInputEmoji(false)}
+                          />
                         </div>
                       )}</div>
                       <button type="submit" className="w-10 h-10 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 hover:shadow-lg" style={{ background: 'linear-gradient(135deg, #6366f1 0%, #7c3aed 100%)', boxShadow: '0 2px 10px rgba(99,102,241,0.3)' }} disabled={isGroupMode ? (!newMessage.trim() && !imagePreview && !pendingFile) : (!newDMMessage.trim() && !imagePreview && !pendingFile)}><Send className="w-4 h-4 text-white" /></button>
@@ -1563,8 +1723,40 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="px-5 py-6 flex flex-col items-center" style={{ borderBottom: '1px solid #e5e7eb' }}>
-                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 font-black tracking-tight" style={{ background: '#4f46e5', fontSize: selectedChat.isDefault ? '13px' : '18px' }}>
-                  <span className="text-white">{selectedChat.isDefault ? getGroupAbbr(selectedChat) : getGroupInitials(selectedChat.name)}</span>
+                {/* Group avatar — clickable for admin on non-default groups */}
+                <div className="relative mb-3 group/avatar">
+                  {selectedChat.icon ? (
+                    <img
+                      src={selectedChat.icon}
+                      alt={selectedChat.name}
+                      className="w-16 h-16 rounded-2xl object-cover"
+                      style={{ border: '2px solid rgba(99,102,241,0.15)' }}
+                    />
+                  ) : (
+                    <div
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center font-black tracking-tight"
+                      style={{ background: '#4f46e5', fontSize: selectedChat.isDefault ? '13px' : '18px' }}
+                    >
+                      <span className="text-white">
+                        {selectedChat.isDefault ? getGroupAbbr(selectedChat) : getGroupInitials(selectedChat.name)}
+                      </span>
+                    </div>
+                  )}
+                  {/* Camera button — only admin on non-default groups */}
+                  {!selectedChat.isDefault && currentUserRole === 'admin' && (
+                    <button
+                      onClick={() => groupAvatarInputRef.current?.click()}
+                      disabled={isUploadingGroupAvatar}
+                      title="Change group photo"
+                      className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-full flex items-center justify-center shadow-md border-2 border-white transition-all hover:scale-110 disabled:opacity-60"
+                      style={{ background: '#4f46e5' }}
+                    >
+                      {isUploadingGroupAvatar
+                        ? <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                        : <Camera className="w-3.5 h-3.5 text-white" />
+                      }
+                    </button>
+                  )}
                 </div>
                 <h4 className="text-base font-bold text-gray-900 text-center">{selectedChat.name}</h4>
                 <div className="flex items-center gap-2 mt-1">
@@ -1627,6 +1819,63 @@ export default function HomePage() {
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowCreateGroup(false)}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold text-gray-900 mb-5">Create a Group</h2>
+
+            {/* ── Group photo upload ── */}
+            <div className="flex justify-center mb-5">
+              <div className="relative">
+                <div
+                  className="w-20 h-20 rounded-2xl flex items-center justify-center overflow-hidden cursor-pointer relative group/avatar"
+                  style={{ background: groupForm.icon ? 'transparent' : 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: '2px dashed #c7d2fe' }}
+                  onClick={() => groupImageInputRef.current?.click()}
+                >
+                  {groupForm.icon ? (
+                    <img src={groupForm.icon} alt="" className="w-full h-full object-cover rounded-2xl" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1">
+                      <Camera className="w-6 h-6 text-white/80" />
+                      <span className="text-[9px] text-white/70 font-medium">Add Photo</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/30 rounded-2xl opacity-0 group-hover/avatar:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                {groupForm.icon && (
+                  <button
+                    onClick={e => { e.stopPropagation(); setGroupForm(p => ({ ...p, icon: '' })) }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md hover:bg-red-600 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+                <input
+                  ref={groupImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    e.target.value = ''
+                    const reader = new FileReader()
+                    reader.onload = () => {
+                      const img = new Image()
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas')
+                        const size = Math.min(img.width, img.height)
+                        canvas.width = 300; canvas.height = 300
+                        const ctx = canvas.getContext('2d')!
+                        ctx.drawImage(img, (img.width - size) / 2, (img.height - size) / 2, size, size, 0, 0, 300, 300)
+                        setGroupForm(p => ({ ...p, icon: canvas.toDataURL('image/jpeg', 0.85) }))
+                      }
+                      img.src = reader.result as string
+                    }
+                    reader.readAsDataURL(file)
+                  }}
+                />
+              </div>
+            </div>
+
             <div className="mb-4"><label className="block text-sm font-semibold text-gray-700 mb-2">Group Name</label><input type="text" value={groupForm.name} onChange={e => { setGroupForm(p => ({ ...p, name: e.target.value })); if (groupErrors.name) setGroupErrors(p => ({ ...p, name: '' })) }} placeholder="e.g., Study Group" className={`w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/30 text-gray-900 placeholder-gray-400 ${groupErrors.name ? 'ring-1 ring-red-500' : ''}`} style={{ background: 'white', border: '1px solid #e5e7eb' }} />{groupErrors.name && <p className="text-xs text-red-400 flex items-center gap-1 mt-1.5"><AlertCircle className="w-3.5 h-3.5" />{groupErrors.name}</p>}</div>
             <div className="mb-4"><label className="block text-sm font-semibold text-gray-700 mb-2">Description</label><textarea value={groupForm.description} onChange={e => { setGroupForm(p => ({ ...p, description: e.target.value })); if (groupErrors.description) setGroupErrors(p => ({ ...p, description: '' })) }} placeholder="What's this group about?" rows={3} className={`w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600/30 resize-none text-gray-900 placeholder-gray-400 ${groupErrors.description ? 'ring-1 ring-red-500' : ''}`} style={{ background: 'white', border: '1px solid #e5e7eb' }} />{groupErrors.description && <p className="text-xs text-red-400 flex items-center gap-1 mt-1.5"><AlertCircle className="w-3.5 h-3.5" />{groupErrors.description}</p>}</div>
             <div className="mb-6">
@@ -1637,7 +1886,7 @@ export default function HomePage() {
               </div>
               <p className="text-[11px] text-gray-400 mt-1.5">{groupForm.visibility === 'public' ? 'Anyone from your university can find and join' : 'Only people with the invite link can join'}</p>
             </div>
-            <div className="flex gap-3"><button onClick={() => { setShowCreateGroup(false); setGroupErrors({}); setGroupForm({ name: '', description: '', visibility: 'public' }) }} className="flex-1 px-4 py-2.5 rounded-xl text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-all" style={{ border: '1px solid #d1d5db' }}>Cancel</button><button onClick={handleCreateGroup} disabled={isCreating} className="flex-1 px-4 py-2.5 text-white rounded-xl font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#4f46e5' }}>{isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Group'}</button></div>
+            <div className="flex gap-3"><button onClick={() => { setShowCreateGroup(false); setGroupErrors({}); setGroupForm({ name: '', description: '', visibility: 'public', icon: '' }) }} className="flex-1 px-4 py-2.5 rounded-xl text-gray-700 font-semibold text-sm hover:bg-gray-50 transition-all" style={{ border: '1px solid #d1d5db' }}>Cancel</button><button onClick={handleCreateGroup} disabled={isCreating} className="flex-1 px-4 py-2.5 text-white rounded-xl font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: '#4f46e5' }}>{isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Create Group'}</button></div>
           </div>
         </div>
       )}
@@ -1806,6 +2055,34 @@ export default function HomePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PENDING APPROVAL MODAL ── */}
+      {pendingApproval && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setPendingApproval(null)}>
+          <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center text-center">
+              <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mb-4">
+                <span className="text-2xl">⏳</span>
+              </div>
+              <h2 className="text-lg font-bold text-gray-900 mb-2">Request Sent!</h2>
+              <p className="text-sm text-gray-500 mb-1">
+                Your request to join
+              </p>
+              <p className="text-base font-bold text-indigo-600 mb-3">"{pendingApproval.groupName}"</p>
+              <p className="text-sm text-gray-500 mb-6">
+                is pending admin approval. You'll receive a notification once you're approved.
+              </p>
+              <button
+                onClick={() => setPendingApproval(null)}
+                className="w-full px-4 py-2.5 text-white rounded-xl font-semibold text-sm"
+                style={{ background: '#4f46e5' }}
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>

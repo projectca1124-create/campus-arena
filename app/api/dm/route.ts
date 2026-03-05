@@ -23,8 +23,8 @@ export async function GET(request: Request) {
   try {
     const auth = await getAuthUser()
     if (!auth) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-
     const userId = auth.userId
+
     const { searchParams } = new URL(request.url)
     const otherUserId = searchParams.get('otherUserId')
     const after = searchParams.get('after')
@@ -39,19 +39,16 @@ export async function GET(request: Request) {
       if (after) where.createdAt = { gt: new Date(after) }
 
       const messages = await prisma.directMessage.findMany({
-        where,
-        select: DM_SELECT,
+        where, select: DM_SELECT,
         orderBy: { createdAt: 'asc' },
         take: after ? 50 : 100,
       })
 
-      // Mark unread messages as read
       if (!after) {
         const updated = await prisma.directMessage.updateMany({
           where: { senderId: otherUserId, receiverId: userId, read: false },
           data: { read: true },
         })
-
         if (updated.count > 0) {
           const channel = getDMChannel(userId, otherUserId)
           await publishEvent(channel, 'messages-read', {
@@ -64,7 +61,7 @@ export async function GET(request: Request) {
       return Response.json({ messages })
     }
 
-    // Return conversations list
+    // Conversations list
     const allDMs = await prisma.directMessage.findMany({
       where: { OR: [{ senderId: userId }, { receiverId: userId }] },
       select: {
@@ -96,7 +93,7 @@ export async function GET(request: Request) {
 
     return Response.json({ conversations })
   } catch (error) {
-    console.error('DM GET error:', error)
+    console.error('DM error:', error)
     return Response.json({ error: 'Failed' }, { status: 500 })
   }
 }
@@ -126,16 +123,16 @@ export async function POST(request: Request) {
       select: DM_SELECT,
     })
 
-    // Ably: broadcast to DM channel (both users subscribed)
+    // Publish to DM channel (both users see it)
     const channel = getDMChannel(senderId, receiverId)
     await publishEvent(channel, 'new-message', { message })
 
-    // DB notification + Ably push
-    const preview = content?.substring(0, 60) || '📎 Attachment'
+    // Notify receiver — DB notification (shows in bell) + real-time Ably ping
     const senderName = `${message.sender.firstName} ${message.sender.lastName}`
-    await notifyDM(receiverId, senderName, preview, senderId).catch(() => {})
-
-    // Ably: notify receiver on their personal channel
+    const dmPreview = content?.substring(0, 50) || '📎 Attachment'
+    // Persist to DB so bell shows it (was missing — fixing DM notification bug)
+    notifyDM(receiverId, senderName, dmPreview, senderId).catch(() => {})
+    // Real-time ping for instant badge
     await publishEvent(`user-${receiverId}`, 'new-dm-notification', {
       from: {
         id: message.sender.id,
@@ -143,13 +140,13 @@ export async function POST(request: Request) {
         lastName: message.sender.lastName,
         profileImage: message.sender.profileImage,
       },
-      preview: content?.substring(0, 50) || '📎 Attachment',
+      preview: dmPreview,
       timestamp: message.createdAt,
     })
 
     return Response.json({ message })
   } catch (error) {
-    console.error('DM POST error:', error)
+    console.error('Send DM error:', error)
     return Response.json({ error: 'Failed to send' }, { status: 500 })
   }
 }

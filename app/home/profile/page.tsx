@@ -34,7 +34,7 @@ const GRAD_STANDINGS = ['Junior', 'Senior', 'Alumni']
 
 // ─── Compress image via canvas before upload ─────────────────────
 // Fixes silent failures caused by large base64 payloads exceeding API body limits
-function compressImage(file: File, maxWidth = 400, quality = 0.82): Promise<string> {
+function compressImage(file: File, maxWidth = 800, quality = 0.85): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -331,7 +331,7 @@ export default function ProfilePage() {
 
     try {
       // Compress to max 400px wide, quality 0.82 — keeps payload well under 500KB
-      const compressed = await compressImage(file, 400, 0.82)
+      const compressed = await compressImage(file, 800, 0.85)
 
       const res = await fetch('/api/profile', {
         method: 'PUT',

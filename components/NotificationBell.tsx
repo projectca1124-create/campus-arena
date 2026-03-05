@@ -139,8 +139,16 @@ export default function NotificationBell({ userId }: { userId: string }) {
   // ── Click notification → navigate ──
   const handleNotificationClick = (n: Notification) => {
     setIsOpen(false); setShowAll(false)
-    if (n.link) { router.push(n.link); return }
-    if (n.type === 'dm') router.push('/home')
+    // All notifications have n.link set by createNotification helpers:
+    // DM:          /home?openDM=<senderId>&dmName=<name>&tab=dms
+    // Group msg:   /home (with groupId if applicable)
+    // Campus talk: /home/campus-talks?thread=<talkId>
+    if (n.link) {
+      router.push(n.link)
+      return
+    }
+    // Fallback
+    if (n.type === 'dm') router.push('/home?tab=dms')
     else if (n.type === 'message') router.push('/home')
     else if (n.type === 'campus_talk') router.push('/home/campus-talks')
     else router.push('/home')

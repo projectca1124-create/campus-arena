@@ -6,7 +6,7 @@ const prisma = new PrismaClient()
 
 // Increase body size limit so compressed profile images (~200KB) don't get rejected
 export const config = {
-  api: { bodyParser: { sizeLimit: '2mb' } },
+  api: { bodyParser: { sizeLimit: '4mb' } },
 }
 
 const USER_SELECT = {

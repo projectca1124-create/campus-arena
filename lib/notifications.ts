@@ -67,7 +67,7 @@ export async function notifyGroupMessage(
         type: 'message',
         title: `👥 ${groupName}`,
         body: `${senderName}: ${preview}`,
-        link: `/home`,
+        link: `/home?groupId=${groupId}`,
       })
     )
   )

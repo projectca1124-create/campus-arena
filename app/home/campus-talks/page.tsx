@@ -82,7 +82,7 @@ export default function CampusTalksPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [activeTab, setActiveTab] = useState<'all' | 'unanswered' | 'my' | 'answered'>('all')
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES)
-  const [unansweredCount, setUnansweredCount] = useState(0)  // ← NEW
+  const [unansweredCount, setUnansweredCount] = useState(0)
 
   const [showAskModal, setShowAskModal] = useState(false)
   const [askForm, setAskForm] = useState({ title: '', content: '', category: 'General' })
@@ -110,7 +110,6 @@ export default function CampusTalksPage() {
   const [editResponseContent, setEditResponseContent] = useState('')
   const [isSavingResponseEdit, setIsSavingResponseEdit] = useState(false)
 
-  const menuRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       const target = e.target as HTMLElement
@@ -145,14 +144,46 @@ export default function CampusTalksPage() {
         const data = await res.json()
         setTalks(data.talks || [])
         if (data.categories?.length > 0) setCategories([...new Set([...DEFAULT_CATEGORIES, ...data.categories])])
-        // ── Always update the unanswered count from every API response ──
         if (typeof data.unansweredCount === 'number') setUnansweredCount(data.unansweredCount)
       }
     } catch (err) { console.error('Error:', err) }
     finally { setIsLoading(false) }
   }
 
-  useEffect(() => { if (!user) return; const t = setTimeout(() => loadTalks(user.id, searchQuery, categoryFilter, activeTab), 300); return () => clearTimeout(t) }, [searchQuery, categoryFilter, activeTab])
+  useEffect(() => {
+    if (!user) return
+    const t = setTimeout(() => loadTalks(user.id, searchQuery, categoryFilter, activeTab), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery, categoryFilter, activeTab])
+
+  // ── Auto-open thread from notification link (?thread=talkId) ──
+  // Runs once when user is loaded. Fetches the talk directly by ID so it
+  // works regardless of which tab is active or what's currently loaded.
+  useEffect(() => {
+    if (!user) return
+    const params = new URLSearchParams(window.location.search)
+    const threadId = params.get('thread')
+    if (!threadId) return
+
+    // Clean URL immediately
+    window.history.replaceState({}, '', '/home/campus-talks')
+
+    // Try already-loaded talks first (instant)
+    const match = talks.find(t => t.id === threadId)
+    if (match) {
+      openDiscussion(match)
+      return
+    }
+
+    // Fetch the specific talk by ID directly — works even if it's on a
+    // different tab (e.g. "My Questions") or filtered out
+    fetch(`/api/campus-talks/${threadId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.talk) openDiscussion(data.talk)
+      })
+      .catch(() => {})
+  }, [user]) // intentionally only depends on user, not talks
 
   const handleAskQuestion = async () => {
     const errors: Record<string, string> = {}; if (!askForm.title.trim()) errors.title = 'Question is required.'
@@ -160,13 +191,12 @@ export default function CampusTalksPage() {
     try {
       const res = await fetch('/api/campus-talks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...askForm, userId: user?.id }) })
       if (res.ok) {
-        const data = await res.json()
-        setTalks(prev => [data.talk, ...prev])
         setShowAskModal(false)
         setAskForm({ title: '', content: '', category: 'General' })
         setAskErrors({})
-        // New question is unanswered → increment count
+        setActiveTab('unanswered')
         setUnansweredCount(prev => prev + 1)
+        if (user) loadTalks(user.id, searchQuery, categoryFilter, 'unanswered')
       }
     } catch (err) { console.error('Error:', err) }
     finally { setIsPosting(false) }
@@ -174,7 +204,10 @@ export default function CampusTalksPage() {
 
   const openDiscussion = async (talk: CampusTalk) => {
     setSelectedTalk(talk); setIsLoadingResponses(true); setCardMenuId(null)
-    try { const res = await fetch(`/api/campus-talks/${talk.id}/responses`); if (res.ok) { const data = await res.json(); setResponses((data.responses || []).reverse()) } }
+    try {
+      const res = await fetch(`/api/campus-talks/${talk.id}/responses`)
+      if (res.ok) { const data = await res.json(); setResponses((data.responses || []).reverse()) }
+    }
     catch (err) { console.error('Error:', err) }
     finally { setIsLoadingResponses(false) }
   }
@@ -190,7 +223,6 @@ export default function CampusTalksPage() {
         const wasUnanswered = selectedTalk.responseCount === 0
         setTalks(prev => prev.map(t => t.id === selectedTalk.id ? { ...t, responseCount: t.responseCount + 1 } : t))
         setSelectedTalk(prev => prev ? { ...prev, responseCount: prev.responseCount + 1 } : null)
-        // If this was the first response, it's no longer unanswered → decrement
         if (wasUnanswered) setUnansweredCount(prev => Math.max(0, prev - 1))
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
         setTimeout(() => responseEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
@@ -199,7 +231,6 @@ export default function CampusTalksPage() {
     finally { setIsSendingResponse(false) }
   }
 
-  // ─── Delete question ───
   const handleDeleteQuestion = async (talkId: string) => {
     if (!confirm('Delete this question and all its responses? This cannot be undone.')) return
     const talk = talks.find(t => t.id === talkId)
@@ -208,14 +239,12 @@ export default function CampusTalksPage() {
       if (res.ok) {
         setTalks(prev => prev.filter(t => t.id !== talkId))
         if (selectedTalk?.id === talkId) { setSelectedTalk(null); setResponses([]) }
-        // If the deleted question was unanswered, decrement count
         if (talk && talk.responseCount === 0) setUnansweredCount(prev => Math.max(0, prev - 1))
       }
     } catch (err) { console.error('Error:', err) }
     finally { setCardMenuId(null); setThreadMenuOpen(false) }
   }
 
-  // ─── Edit question ───
   const openEditQuestion = (talk: CampusTalk) => {
     setEditingQuestion(talk)
     setEditQuestionForm({ title: talk.title, content: talk.content || '', category: talk.category })
@@ -243,7 +272,6 @@ export default function CampusTalksPage() {
     finally { setIsSavingEdit(false) }
   }
 
-  // ─── Delete response ───
   const handleDeleteResponse = async (responseId: string) => {
     if (!confirm('Delete this response?')) return
     if (!selectedTalk) return
@@ -254,14 +282,12 @@ export default function CampusTalksPage() {
         setResponses(prev => prev.filter(r => r.id !== responseId))
         setTalks(prev => prev.map(t => t.id === selectedTalk.id ? { ...t, responseCount: Math.max(0, t.responseCount - 1) } : t))
         setSelectedTalk(prev => prev ? { ...prev, responseCount: Math.max(0, prev.responseCount - 1) } : null)
-        // If deleting the last response → question becomes unanswered again → increment
         if (remainingCount === 0) setUnansweredCount(prev => prev + 1)
       }
     } catch (err) { console.error('Error:', err) }
     finally { setResponseMenuId(null) }
   }
 
-  // ─── Edit response ───
   const openEditResponse = (r: TalkResponse) => {
     setEditingResponseId(r.id)
     setEditResponseContent(r.content)
@@ -290,21 +316,6 @@ export default function CampusTalksPage() {
       .then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000) })
   }
 
-  // ── Auto-open thread from notification link (?thread=talkId) ──
-  useEffect(() => {
-    if (!talks.length) return
-    const params = new URLSearchParams(window.location.search)
-    const threadId = params.get('thread')
-    if (threadId) {
-      const match = talks.find(t => t.id === threadId)
-      if (match) {
-        setSelectedTalk(match)
-        // Clean the URL so back button works correctly
-        window.history.replaceState({}, '', '/home/campus-talks')
-      }
-    }
-  }, [talks])
-
   const activeTabIndex = TABS.findIndex(t => t.key === activeTab)
 
   return (
@@ -312,7 +323,6 @@ export default function CampusTalksPage() {
       {/* ━━━━━━ THREAD DETAIL VIEW ━━━━━━ */}
       {selectedTalk ? (
         <div className="flex flex-col h-full">
-          {/* ── Sticky question header ── */}
           <div className="flex-shrink-0 bg-white border-b border-gray-200">
             <div className="h-[3px]" style={{ background: getCat(selectedTalk.category).accent }} />
             <div className="px-8 py-4">
@@ -370,7 +380,6 @@ export default function CampusTalksPage() {
             </div>
           </div>
 
-          {/* ── Scrollable responses ── */}
           <div className="flex-1 overflow-y-auto bg-gray-50">
             <div className="px-8 py-5">
               <p className="text-[13px] font-bold text-gray-900 mb-4">{responses.length} Response{responses.length !== 1 ? 's' : ''}</p>
@@ -451,7 +460,6 @@ export default function CampusTalksPage() {
             </div>
           </div>
 
-          {/* ── Fixed bottom reply ── */}
           <div className="flex-shrink-0 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
             <div className="px-8 py-3.5">
               <form onSubmit={handleSendResponse} className="flex items-end gap-3">
@@ -473,28 +481,14 @@ export default function CampusTalksPage() {
         </div>
 
       ) : (
-        /* ━━━━━━ LIST VIEW ━━━━━━ */
         <div className="h-full overflow-y-auto">
-          {/* ── Top nav bar with back button + university ── */}
-          <div className="sticky top-0 z-20 flex items-center justify-between px-6 h-14 border-b" style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderColor: '#e5e7eb' }}>
-            <div className="flex items-center gap-3">
-              <button onClick={() => router.push('/home')} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all">
-                <ArrowLeft className="w-[18px] h-[18px]" />
-              </button>
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold text-[10px]">CA</span>
-                </div>
-                <div>
-                  <span className="font-bold text-[14px] text-gray-900 tracking-tight leading-none block">Campus Arena</span>
-                  {user?.university && <span className="text-[11px] text-indigo-500 font-semibold leading-none block mt-0.5">{user.university}</span>}
-                </div>
-              </div>
-            </div>
-            <Megaphone className="w-[18px] h-[18px] text-indigo-400" />
+          <div className="sticky top-0 z-20 flex items-center gap-3 px-6 h-14 border-b" style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderColor: '#e5e7eb' }}>
+            <button onClick={() => router.push('/home')} className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all">
+              <ArrowLeft className="w-[18px] h-[18px]" />
+            </button>
+            <span className="font-bold text-[16px] text-gray-900 tracking-tight">Campus Talks</span>
           </div>
           <div className="px-8 py-5">
-            {/* Hero */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl px-7 py-5 mb-5 text-white relative overflow-hidden">
               <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/5 rounded-full"></div>
               <div className="absolute bottom-0 left-1/3 w-32 h-32 bg-white/5 rounded-full translate-y-1/2"></div>
@@ -507,13 +501,11 @@ export default function CampusTalksPage() {
               </div>
             </div>
 
-            {/* Search + Category */}
             <div className="flex items-center gap-3 mb-4">
               <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search discussions..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" /></div>
               <div className="relative"><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="appearance-none pl-4 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 cursor-pointer"><option value="">All Categories</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" /></div>
             </div>
 
-            {/* ── Sliding pill tabs ── */}
             <div className="relative flex bg-gray-100 rounded-xl p-1 mb-5">
               <div className="absolute top-1 bottom-1 rounded-lg bg-indigo-600 shadow-md transition-all duration-300 ease-in-out"
                 style={{
@@ -526,7 +518,6 @@ export default function CampusTalksPage() {
                     activeTab === tab.key ? 'text-white' : 'text-gray-500 hover:text-gray-700'
                   }`}>
                   {tab.label}
-                  {/* ── Unanswered badge ── */}
                   {tab.key === 'unanswered' && unansweredCount > 0 && (
                     <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold transition-colors ${
                       activeTab === 'unanswered' ? 'bg-white/25 text-white' : 'bg-indigo-100 text-indigo-600'
@@ -538,7 +529,6 @@ export default function CampusTalksPage() {
               ))}
             </div>
 
-            {/* Discussion cards */}
             {isLoading ? (
               <div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-indigo-400 animate-spin" /></div>
             ) : talks.length > 0 ? (
@@ -549,32 +539,23 @@ export default function CampusTalksPage() {
                     <div key={talk.id} className="bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-gray-300 transition-all cursor-pointer relative group/card"
                       onClick={() => openDiscussion(talk)}>
                       <div className="px-6 py-4">
-                        {/* Title + category badge inline */}
                         <div className="flex items-start gap-2 mb-2.5 flex-wrap">
                           <h3 className="text-[15px] font-bold text-gray-900 leading-snug group-hover/card:text-indigo-600 transition-colors">{talk.title}</h3>
                           <span className={`inline-flex items-center self-center text-[11px] font-bold px-2 py-0.5 rounded-md border flex-shrink-0 ${cat.bg} ${cat.text} ${cat.border}`}>
                             {talk.category}
                           </span>
                         </div>
-
-                        {/* Bottom meta row: author · time  ···  responses  [⋮] */}
                         <div className="flex items-center gap-2">
                           <span className="text-[12px] text-gray-400 flex-shrink-0">
                             By <span className="text-gray-500 font-medium">{talk.user.firstName} {talk.user.lastName}</span>
                             <span className="mx-1.5">·</span>
                             {timeAgo(talk.createdAt)}
                           </span>
-
-                          {/* Push to right */}
                           <span className="flex-1" />
-
-                          {/* Response count */}
                           <span className="flex items-center gap-1 text-[12px] text-gray-400 flex-shrink-0">
                             <MessageCircle className="w-3.5 h-3.5" />
                             {talk.responseCount} response{talk.responseCount !== 1 ? 's' : ''}
                           </span>
-
-                          {/* Three-dot menu */}
                           <div className="relative flex-shrink-0" data-menu>
                             <button onClick={e => { e.stopPropagation(); e.preventDefault(); setCardMenuId(cardMenuId === talk.id ? null : talk.id); setThreadMenuOpen(false); setResponseMenuId(null) }}
                               className="p-1 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all ml-1">
@@ -619,7 +600,7 @@ export default function CampusTalksPage() {
         </div>
       )}
 
-      {/* ===== ASK QUESTION MODAL ===== */}
+      {/* ASK MODAL */}
       {showAskModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAskModal(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
@@ -650,7 +631,7 @@ export default function CampusTalksPage() {
         </div>
       )}
 
-      {/* ===== EDIT QUESTION MODAL ===== */}
+      {/* EDIT QUESTION MODAL */}
       {editingQuestion && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditingQuestion(null)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
