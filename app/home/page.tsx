@@ -964,10 +964,31 @@ export default function HomePage() {
     }
 
     if (selectedDM) {
-      // new-message is handled by the persistent effect above (always-on DM channel subscriptions)
-      // Only subscribe here to typing indicators which need the active chat context
       const ch = ably.channels.get(getDMChannelName(user.id, selectedDM.user.id))
       channels.push(ch)
+
+      // ✅ Fresh new-message subscription scoped to this active chat.
+      // The persistent effect's subscribeDMChannel closure captures otherUserId at subscription
+      // time — before this chat was opened. That stale closure can miss React state updates.
+      // Re-subscribing here with a fresh closure guarantees messages appear instantly.
+      // Deduplication by m.id prevents double-rendering with the persistent effect.
+      ch.subscribe('new-message', (msg: Ably.Message) => {
+        const data = msg.data as { message: DMMessage }
+        const m = data.message
+        setDmMessages(prev => {
+          if (prev.some(x => x.id === m.id)) return prev
+          const tempIdx = prev.findIndex(x =>
+            x.id.startsWith('temp_') && x.senderId === m.senderId && x.content === m.content
+          )
+          if (tempIdx >= 0) { const next = [...prev]; next[tempIdx] = m; return next }
+          return [...prev, m]
+        })
+        setDmConversations(prev => prev.map(c =>
+          c.user.id === selectedDM.user.id
+            ? { ...c, lastMessage: m.content || '📎 Attachment', lastMessageAt: m.createdAt, unreadCount: 0 }
+            : c
+        ))
+      })
 
       ch.subscribe('message-deleted', (msg: Ably.Message) => {
         const data = msg.data as { messageId: string }
@@ -1017,10 +1038,17 @@ export default function HomePage() {
     return () => {
       setTypingUsers({})
       setDmReadStatus(false)
-      // Detach each channel entirely (not just unsubscribe listeners)
-      // so Ably frees the channel resource and the next subscribe starts clean
       channels.forEach(ch => {
-        try { ch.detach() } catch {}
+        try {
+          // Only fully detach group channels — DM channels must stay attached
+          // because the persistent effect's always-on subscription uses the same channel.
+          // Detaching a DM channel would kill real-time messages when both users are chatting.
+          if (ch.name.startsWith('group-')) {
+            ch.detach()
+          } else {
+            ch.unsubscribe()
+          }
+        } catch {}
       })
     }
   }, [selectedChat?.id, selectedDM?.user.id, user?.id])
