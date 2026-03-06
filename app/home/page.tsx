@@ -794,12 +794,29 @@ export default function HomePage() {
       const data = msg.data as { from: any; preview: string; timestamp: string }
       if (!data?.from?.id) return
 
-      // CRITICAL: subscribe to this sender's DM channel immediately
-      // This is the primary subscription trigger for new conversations
+      // Subscribe to this sender's DM channel immediately (for future messages)
       subscribeDM(data.from.id, data.from)
 
       const isOpen = selectedDMRef.current?.user.id === data.from.id
-      if (!isOpen) {
+
+      if (isOpen) {
+        // ✅ KEY FIX: Race condition — new-message on DM channel may arrive BEFORE
+        // subscribeDM completes, so we fetch from DB to guarantee nothing is missed.
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
+        if (currentUser.id) {
+          fetch(`/api/dm?otherUserId=${data.from.id}&userId=${currentUser.id}`)
+            .then(r => r.json())
+            .then(d => {
+              if (d.messages?.length) {
+                setDmMessages(prev => {
+                  const ids = new Set(prev.map((m: any) => m.id))
+                  const fresh = d.messages.filter((m: any) => !ids.has(m.id))
+                  return fresh.length ? [...prev, ...fresh] : prev
+                })
+              }
+            }).catch(() => {})
+        }
+      } else {
         const dmChatId = `dm_${data.from.id}`
         if (!mutedChatsRef.current.has(dmChatId)) playReceiveSound()
       }
