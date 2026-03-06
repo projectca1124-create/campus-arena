@@ -5,7 +5,6 @@ let ablyClient: Ably.Realtime | null = null
 let ablyUserId: string | null = null
 
 export function getAblyClient(userId?: string): Ably.Realtime {
-  // If a userId is provided and different from current, force recreate
   if (userId && ablyUserId && userId !== ablyUserId) {
     try { ablyClient?.close() } catch {}
     ablyClient = null
@@ -15,7 +14,6 @@ export function getAblyClient(userId?: string): Ably.Realtime {
   if (ablyClient) {
     const state = ablyClient.connection.state
     if (state === 'failed' || state === 'suspended') {
-      console.warn('[Ably] Bad connection state:', state, '— recreating client')
       try { ablyClient.close() } catch {}
       ablyClient = null
     } else {
@@ -23,25 +21,38 @@ export function getAblyClient(userId?: string): Ably.Realtime {
     }
   }
 
+  // localStorage fallback if userId not passed
+  if (!ablyUserId) {
+    try {
+      const u = JSON.parse(localStorage.getItem('user') || '{}')
+      if (u?.id) ablyUserId = u.id
+    } catch {}
+  }
+
   ablyClient = new Ably.Realtime({
     authUrl: '/api/ably/auth',
     authMethod: 'POST',
-    // Pass userId as a custom header — more reliable than authParams
-    // (authParams are sent form-encoded which can be tricky to parse)
-    authHeaders: ablyUserId ? { 'x-user-id': ablyUserId } : undefined,
-    // Don't echo messages back to publisher (eliminates double-processing)
+    // Both headers AND params — belt and suspenders guarantee userId reaches the auth route
+    authHeaders: { 'x-user-id': ablyUserId || '' },
+    authParams: { clientId: ablyUserId || '', userId: ablyUserId || '' },
     echoMessages: false,
-    // Don't queue messages while connecting — prevents stale backlog
-    queueMessages: false,
+    // ✅ FIXED: true = subscriptions queue until connected, never silently dropped
+    queueMessages: true,
     disconnectedRetryTimeout: 2000,
-    suspendedRetryTimeout: 15000,
-    // Auto-recover channel subscriptions after brief disconnects
+    suspendedRetryTimeout: 10000,
     recover: (_, cb) => cb(true),
   })
 
   ablyClient.connection.on((stateChange: Ably.ConnectionStateChange) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Ably]', stateChange.previous, '→', stateChange.current, stateChange.reason?.message || '')
+    const { current, previous, reason } = stateChange
+    if (current === 'failed') {
+      console.error('[Ably] Connection FAILED:', reason?.message)
+    }
+    if (current === 'connected' && previous !== 'connected') {
+      console.log('[Ably] Connected ✓')
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ably-reconnected'))
+      }
     }
   })
 

@@ -1,46 +1,36 @@
 // app/api/ably/auth/route.ts
 import Ably from 'ably'
-import { getAuthUser } from '@/lib/auth'
 
 export async function POST(request: Request) {
   try {
-    // Primary: session-based auth (existing logged-in users)
-    // Fallback: clientId from Ably's token request body (fresh signup — session not yet set)
-    const auth = await getAuthUser()
-    let userId: string | undefined = auth?.userId
+    let userId: string | undefined
 
+    // 1. Custom header (most reliable)
+    userId = request.headers.get('x-user-id') || undefined
+
+    // 2. Form-encoded body (Ably sends authParams this way)
     if (!userId) {
-      // Try multiple fallback methods to get userId (for fresh signup users without session):
+      try {
+        const contentType = request.headers.get('content-type') || ''
+        if (contentType.includes('application/x-www-form-urlencoded')) {
+          const text = await request.text()
+          const params = new URLSearchParams(text)
+          userId = params.get('clientId') || params.get('userId') || undefined
+        } else {
+          const body = await request.clone().json().catch(() => ({}))
+          userId = body?.clientId || body?.userId || undefined
+        }
+      } catch {}
+    }
 
-      // 1. Custom header (most reliable — set via authHeaders in ably-client.ts)
-      const headerUserId = request.headers.get('x-user-id')
-      if (headerUserId) userId = headerUserId
-
-      // 2. Form-encoded body (Ably sends authParams this way when authMethod='POST')
-      if (!userId) {
-        try {
-          const contentType = request.headers.get('content-type') || ''
-          if (contentType.includes('application/x-www-form-urlencoded')) {
-            const text = await request.text()
-            const params = new URLSearchParams(text)
-            if (params.get('clientId')) userId = params.get('clientId')!
-          } else {
-            const cloned = request.clone()
-            const body = await cloned.json().catch(() => ({}))
-            if (body?.clientId) userId = body.clientId
-          }
-        } catch {}
-      }
-
-      // 3. URL query string fallback
-      if (!userId) {
-        const url = new URL(request.url)
-        const qp = url.searchParams.get('clientId')
-        if (qp) userId = qp
-      }
+    // 3. URL query string fallback
+    if (!userId) {
+      const url = new URL(request.url)
+      userId = url.searchParams.get('clientId') || url.searchParams.get('userId') || undefined
     }
 
     if (!userId) {
+      console.error('[Ably auth] No userId found')
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -48,10 +38,10 @@ export async function POST(request: Request) {
 
     const tokenRequest = await ably.auth.createTokenRequest({
       clientId: userId,
-      // 24h TTL — default 1h is too short, causes silent disconnects in long sessions
       ttl: 24 * 60 * 60 * 1000,
       capability: {
-        [`user-${userId}`]: ['subscribe'],
+        // ✅ FIXED: added 'publish' — without it notifications can't be sent
+        [`user-${userId}`]: ['subscribe', 'publish'],
         'group-*': ['subscribe', 'publish'],
         'dm-*': ['subscribe', 'publish'],
         'presence-updates': ['subscribe', 'publish'],
@@ -60,7 +50,7 @@ export async function POST(request: Request) {
 
     return Response.json(tokenRequest)
   } catch (error) {
-    console.error('Ably auth error:', error)
+    console.error('[Ably auth] Error:', error)
     return Response.json({ error: 'Failed to create token' }, { status: 500 })
   }
 }
