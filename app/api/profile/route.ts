@@ -4,10 +4,9 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-// Increase body size limit so compressed profile images (~200KB) don't get rejected
-export const config = {
-  api: { bodyParser: { sizeLimit: '8mb' } },
-}
+// ✅ Body size limit is now set in next.config.ts via experimental.serverBodySizeLimit
+// The old `export const config = { api: { bodyParser: ... } }` was Pages Router syntax
+// and was silently ignored in App Router — so it was never actually doing anything.
 
 const USER_SELECT = {
   id: true,

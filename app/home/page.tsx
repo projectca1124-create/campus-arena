@@ -17,7 +17,7 @@ import {
   BellOff, BellRing, VolumeX, Reply, Sticker, ChevronDown,
   Forward, Pencil, Trash2, Copy, Check, CheckCheck,
   Pin, PinOff, Link2, Share2, Lock, Globe, Shield, UserPlus,
-  Menu, ChevronLeft, Camera,
+  Menu, ChevronLeft, Camera, CheckCircle2,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -268,6 +268,8 @@ export default function HomePage() {
 
   const [pinnedGroupId, setPinnedGroupId] = useState<string | null>(null)
   const [shareGroupViaDM, setShareGroupViaDM] = useState<Group | null>(null)
+  const [shareDMSentTo, setShareDMSentTo] = useState<Set<string>>(new Set())
+  const [shareDMSending, setShareDMSending] = useState<string | null>(null)
   const [copiedInviteLink, setCopiedInviteLink] = useState(false)
   const [copiedInviteCode, setCopiedInviteCode] = useState(false)
   const [showJoinModal, setShowJoinModal] = useState(false)
@@ -408,12 +410,31 @@ export default function HomePage() {
       }
     } catch { setPinnedGroupId(prev) }
   }
-  const handleShareGroupViaDM = (conv: DMConversation, group: Group) => {
-    if (!user) return
+  const handleShareGroupViaDM = async (conv: DMConversation, group: Group) => {
+    if (!user || shareDMSending) return
+    if (shareDMSentTo.has(conv.user.id)) return
+    setShareDMSending(conv.user.id)
     const link = getInviteLink(group)
-    fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`, receiverId: conv.user.id }) })
-    setShareGroupViaDM(null)
+    try {
+      const res = await fetch('/api/dm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`,
+          // ✅ FIX 1: senderId was missing — API requires it, causing silent failure
+          senderId: user.id,
+          receiverId: conv.user.id,
+        }),
+      })
+      if (res.ok) {
+        // ✅ FIX 2: Track sent state per contact so user sees checkmark feedback
+        setShareDMSentTo(prev => new Set(prev).add(conv.user.id))
+      }
+    } catch (err) {
+      console.error('Share group via DM error:', err)
+    } finally {
+      setShareDMSending(null)
+    }
   }
   const handleDeleteGroup = async () => {
     if (!selectedChat || !user) return
@@ -794,29 +815,12 @@ export default function HomePage() {
       const data = msg.data as { from: any; preview: string; timestamp: string }
       if (!data?.from?.id) return
 
-      // Subscribe to this sender's DM channel immediately (for future messages)
+      // CRITICAL: subscribe to this sender's DM channel immediately
+      // This is the primary subscription trigger for new conversations
       subscribeDM(data.from.id, data.from)
 
       const isOpen = selectedDMRef.current?.user.id === data.from.id
-
-      if (isOpen) {
-        // ✅ KEY FIX: Race condition — new-message on DM channel may arrive BEFORE
-        // subscribeDM completes, so we fetch from DB to guarantee nothing is missed.
-        const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
-        if (currentUser.id) {
-          fetch(`/api/dm?otherUserId=${data.from.id}&userId=${currentUser.id}`)
-            .then(r => r.json())
-            .then(d => {
-              if (d.messages?.length) {
-                setDmMessages(prev => {
-                  const ids = new Set(prev.map((m: any) => m.id))
-                  const fresh = d.messages.filter((m: any) => !ids.has(m.id))
-                  return fresh.length ? [...prev, ...fresh] : prev
-                })
-              }
-            }).catch(() => {})
-        }
-      } else {
+      if (!isOpen) {
         const dmChatId = `dm_${data.from.id}`
         if (!mutedChatsRef.current.has(dmChatId)) playReceiveSound()
       }
@@ -2371,19 +2375,61 @@ export default function HomePage() {
       )}
 
       {shareGroupViaDM && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShareGroupViaDM(null)}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+          onClick={() => { setShareGroupViaDM(null); setShareDMSentTo(new Set()); setShareDMSending(null) }}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[500px] flex flex-col" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold text-gray-900">Share "{shareGroupViaDM.name}"</h2><button onClick={() => setShareGroupViaDM(null)} className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button></div>
-            <div className="mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-2"><Link2 className="w-4 h-4 text-indigo-500 flex-shrink-0" /><p className="text-xs text-gray-500 truncate flex-1">{getInviteLink(shareGroupViaDM)}</p><button onClick={() => copyInviteLink(shareGroupViaDM)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 flex-shrink-0">{copiedInviteLink ? 'Copied!' : 'Copy'}</button></div>
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Send via DM:</p>
-            <div className="flex-1 overflow-y-auto space-y-1">
-              {dmConversations.length > 0 ? dmConversations.map(conv => (
-                <button key={conv.user.id} onClick={() => handleShareGroupViaDM(conv, shareGroupViaDM)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all">
-                  <UserAvatar src={conv.user.profileImage} firstName={conv.user.firstName} lastName={conv.user.lastName} size={36} />
-                  <span className="text-sm font-medium text-gray-900">{conv.user.firstName} {conv.user.lastName}</span>
-                </button>
-              )) : <p className="text-center text-gray-500 text-sm py-6">No DM conversations yet</p>}
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Share &quot;{shareGroupViaDM.name}&quot;</h2>
+              <button onClick={() => { setShareGroupViaDM(null); setShareDMSentTo(new Set()); setShareDMSending(null) }}
+                className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button>
             </div>
+            {/* Invite link preview */}
+            <div className="mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+              <p className="text-xs text-gray-500 truncate flex-1">{getInviteLink(shareGroupViaDM)}</p>
+              <button onClick={() => copyInviteLink(shareGroupViaDM)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 flex-shrink-0">
+                {copiedInviteLink ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Send via DM:</p>
+            {/* Contact list with per-contact sent/sending state */}
+            <div className="flex-1 overflow-y-auto space-y-1">
+              {dmConversations.length > 0 ? dmConversations.map(conv => {
+                const isSent = shareDMSentTo.has(conv.user.id)
+                const isSending = shareDMSending === conv.user.id
+                return (
+                  <button key={conv.user.id}
+                    onClick={() => handleShareGroupViaDM(conv, shareGroupViaDM)}
+                    disabled={isSent || !!shareDMSending}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all disabled:cursor-default">
+                    <UserAvatar src={conv.user.profileImage} firstName={conv.user.firstName} lastName={conv.user.lastName} size={36} />
+                    <span className="text-sm font-medium text-gray-900 flex-1 text-left">{conv.user.firstName} {conv.user.lastName}</span>
+                    {/* ✅ FIX 3: Per-contact feedback — spinner while sending, checkmark when sent */}
+                    {isSending ? (
+                      <Loader2 className="w-4 h-4 text-indigo-400 animate-spin flex-shrink-0" />
+                    ) : isSent ? (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-green-600 flex-shrink-0">
+                        <CheckCircle2 className="w-4 h-4" /> Sent
+                      </span>
+                    ) : (
+                      <span className="text-xs font-semibold text-indigo-500 flex-shrink-0">Send</span>
+                    )}
+                  </button>
+                )
+              }) : <p className="text-center text-gray-500 text-sm py-6">No DM conversations yet</p>}
+            </div>
+            {/* ✅ FIX 3: Done button appears once at least one was sent */}
+            {shareDMSentTo.size > 0 && (
+              <div className="pt-4 border-t border-gray-100 mt-2">
+                <button
+                  onClick={() => { setShareGroupViaDM(null); setShareDMSentTo(new Set()); setShareDMSending(null) }}
+                  className="w-full py-2.5 rounded-xl font-semibold text-sm text-indigo-600 hover:bg-indigo-50 transition-all"
+                  style={{ border: '1px solid #e0e7ff' }}>
+                  Done — Shared with {shareDMSentTo.size} {shareDMSentTo.size === 1 ? 'person' : 'people'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

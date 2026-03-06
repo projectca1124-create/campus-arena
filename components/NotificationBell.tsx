@@ -7,13 +7,8 @@ import { Bell, Trash2, MessageSquare, MessageCircle, Megaphone, Users } from 'lu
 import { getAblyClient } from '@/lib/ably-client'
 
 interface Notification {
-  id: string
-  type: string
-  title: string
-  body: string
-  read: boolean
-  link?: string
-  createdAt: string
+  id: string; type: string; title: string; body: string
+  read: boolean; link?: string; createdAt: string
 }
 
 function timeAgo(dateStr: string) {
@@ -67,26 +62,18 @@ export default function NotificationBell({ userId }: { userId: string }) {
     } catch (err) { console.error('Notifications fetch error:', err) }
   }
 
-  useEffect(() => {
-    if (!userId) return
-    fetchNotifications()
-  }, [userId])
+  useEffect(() => { if (userId) fetchNotifications() }, [userId])
 
   useEffect(() => {
     if (!userId) return
     let channel: any = null
     let mounted = true
-
     const handler = (msg: any) => {
       if (!mounted) return
       const notif: Notification = msg.data
-      setNotifications(prev => {
-        if (prev.some(n => n.id === notif.id)) return prev
-        return [notif, ...prev]
-      })
+      setNotifications(prev => prev.some(n => n.id === notif.id) ? prev : [notif, ...prev])
       setUnreadCount(prev => prev + 1)
     }
-
     const setup = async () => {
       try {
         const ably = getAblyClient(userId)
@@ -98,14 +85,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
         console.error('Ably notification subscription error:', err)
       }
     }
-
     setup()
-
     return () => {
       mounted = false
-      try {
-        if (channel) channel.unsubscribe('new-notification', handler)
-      } catch {}
+      try { if (channel) channel.unsubscribe('new-notification', handler) } catch {}
     }
   }, [userId])
 
@@ -113,12 +96,10 @@ export default function NotificationBell({ userId }: { userId: string }) {
     const opening = !isOpen
     setIsOpen(opening)
     if (!opening) { setShowAll(false); return }
-
     if (unreadCount > 0) {
       try {
         await fetch('/api/notifications', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId }),
         })
         setUnreadCount(0)
@@ -128,61 +109,34 @@ export default function NotificationBell({ userId }: { userId: string }) {
   }
 
   const handleNotificationClick = (n: Notification) => {
-    setIsOpen(false)
-    setShowAll(false)
-
+    setIsOpen(false); setShowAll(false)
     if (!n.link) {
       if (n.type === 'dm') router.push('/home?tab=dms')
       else if (n.type === 'campus_talk') router.push('/home/campus-talks')
       else router.push('/home')
       return
     }
-
     const linkUrl = new URL(n.link, window.location.origin)
     const isAlreadyOnHome = pathname === '/home'
     const isHomeLink = linkUrl.pathname === '/home'
-
-    // Different page (e.g. campus-talks) — just navigate normally
-    if (!isHomeLink) {
-      router.push(n.link)
-      return
-    }
-
-    // Already on /home — router.push() won't re-trigger the URL param useEffect.
-    // Fire a custom window event that page.tsx listens to directly.
+    if (!isHomeLink) { router.push(n.link); return }
     if (isAlreadyOnHome) {
       const params = linkUrl.searchParams
       const openDMId = params.get('openDM')
       const groupId = params.get('groupId')
-
       if (openDMId) {
-        window.dispatchEvent(new CustomEvent('notification-navigate', {
-          detail: {
-            type: 'dm',
-            userId: openDMId,
-            dmName: params.get('dmName') || '',
-          }
-        }))
+        window.dispatchEvent(new CustomEvent('notification-navigate', { detail: { type: 'dm', userId: openDMId, dmName: params.get('dmName') || '' } }))
         return
       }
-
       if (groupId) {
-        window.dispatchEvent(new CustomEvent('notification-navigate', {
-          detail: { type: 'group', groupId }
-        }))
+        window.dispatchEvent(new CustomEvent('notification-navigate', { detail: { type: 'group', groupId } }))
         return
       }
-
-      // Fallback — tab switch
       if (n.type === 'dm') {
-        window.dispatchEvent(new CustomEvent('notification-navigate', {
-          detail: { type: 'tab', tab: 'dms' }
-        }))
+        window.dispatchEvent(new CustomEvent('notification-navigate', { detail: { type: 'tab', tab: 'dms' } }))
       }
       return
     }
-
-    // On a different page, navigating to /home — normal push, useEffect will read params
     router.push(n.link)
   }
 
@@ -190,8 +144,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
     setIsClearing(true)
     try {
       await fetch('/api/notifications', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       })
       setNotifications([]); setUnreadCount(0)
@@ -203,8 +156,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <button onClick={handleOpen}
-        className="relative p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-all">
+      {/* Bell button — 36x36 touch target */}
+      <button
+        onClick={handleOpen}
+        className="relative flex items-center justify-center hover:bg-gray-100 rounded-lg text-gray-500 transition-all"
+        style={{ width: 36, height: 36 }}
+      >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] bg-red-500 rounded-full border-2 border-white">
@@ -216,9 +173,19 @@ export default function NotificationBell({ userId }: { userId: string }) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
-          style={{ width: showAll ? 380 : 340, boxShadow: '0 10px 40px rgba(0,0,0,0.12)', transition: 'width 0.2s ease' }}>
-
+        <div
+          className="absolute top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
+          style={{
+            // ✅ KEY FIX: On mobile the dropdown must not overflow the left edge of the screen.
+            // right: 0 anchors to the bell's right edge.
+            // width is capped at (100vw - 16px) so it never bleeds off screen.
+            // On desktop it's the normal 340px.
+            right: 0,
+            width: 'min(340px, calc(100vw - 16px))',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.12)',
+          }}
+        >
+          {/* Header */}
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900">
               Notifications
@@ -228,18 +195,21 @@ export default function NotificationBell({ userId }: { userId: string }) {
             </h3>
             {notifications.length > 0 && (
               <button onClick={handleClearAll} disabled={isClearing}
-                className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors">
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                style={{ minHeight: 32, minWidth: 32 }}>
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{isClearing ? 'Clearing...' : 'Clear all'}</span>
               </button>
             )}
           </div>
 
-          <div style={{ maxHeight: showAll ? 420 : 300, overflowY: 'auto', transition: 'max-height 0.3s ease' }}>
+          {/* List */}
+          <div style={{ maxHeight: showAll ? 420 : 300, overflowY: 'auto' }}>
             {displayedNotifications.length > 0 ? (
               displayedNotifications.map(n => (
                 <button key={n.id} onClick={() => handleNotificationClick(n)}
-                  className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-all flex items-start gap-3 ${!n.read ? 'bg-indigo-50/40' : ''}`}>
+                  className={`w-full text-left px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-all flex items-start gap-3 ${!n.read ? 'bg-indigo-50/40' : ''}`}
+                  style={{ minHeight: 60 }}>
                   <div className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center">
                     {getNotifIcon(n.type)}
                   </div>
@@ -248,9 +218,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
                     <p className="text-[12px] text-gray-500 mt-0.5 leading-snug line-clamp-2">{n.body}</p>
                     <p className="text-[11px] text-gray-400 mt-1">{timeAgo(n.createdAt)}</p>
                   </div>
-                  {!n.read && (
-                    <div className="w-2 h-2 bg-indigo-500 rounded-full mt-2 flex-shrink-0" />
-                  )}
+                  {!n.read && <div className="w-2 h-2 bg-indigo-500 rounded-full mt-2 flex-shrink-0" />}
                 </button>
               ))
             ) : (
@@ -264,10 +232,12 @@ export default function NotificationBell({ userId }: { userId: string }) {
             )}
           </div>
 
+          {/* Show more */}
           {notifications.length > 5 && (
             <div className="px-4 py-2.5 border-t border-gray-100 text-center">
               <button onClick={() => setShowAll(!showAll)}
-                className="text-sm text-indigo-600 font-semibold hover:text-indigo-700 transition-colors">
+                className="text-sm text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+                style={{ minHeight: 36 }}>
                 {showAll ? 'Show less' : `View all (${notifications.length})`}
               </button>
             </div>

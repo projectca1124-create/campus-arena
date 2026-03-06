@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -9,12 +9,23 @@ export const metadata: Metadata = {
     apple: '/icons/icon-192.png',
   },
   manifest: '/manifest.json',
-  themeColor: '#4f46e5',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'Campus Arena',
   },
+}
+
+// ✅ Viewport must be exported separately in Next.js 13+ App Router
+// This adds the critical <meta name="viewport"> tag that makes mobile work correctly.
+// Without it, browsers render at ~980px desktop width and zoom out to fit.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,          // prevent iOS auto-zoom on input focus
+  userScalable: false,
+  viewportFit: 'cover',     // allow content under notch/home-bar on iPhone
+  themeColor: '#4f46e5',
 }
 
 export default function RootLayout({
@@ -27,9 +38,6 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/favicon.ico" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#4f46e5" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -38,7 +46,12 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{children}</body>
+      <body
+        style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        className="antialiased"
+      >
+        {children}
+      </body>
     </html>
   )
 }

@@ -45,30 +45,9 @@ export default function AuthPage() {
   }
 
   return (
-    /*
-      Force light color-scheme on the entire auth page.
-      This prevents iOS/Android dark mode from:
-        - inverting input backgrounds to black
-        - turning placeholder text invisible
-        - flipping border colors
-      "color-scheme: light" tells the browser to render
-      all system UI (inputs, selects, scrollbars) in light mode.
-    */
-    <div
-      style={{ colorScheme: 'light' }}
-      className="min-h-screen flex items-center justify-center px-4 py-12"
-    >
-      {/*
-        Inline background so it's not affected by dark mode class overrides.
-        Tailwind's bg-* classes can be overridden by prefers-color-scheme;
-        inline style is not.
-      */}
+    <div style={{ colorScheme: 'light' }}>
       <style>{`
-        /* Scope everything inside the auth page to light mode */
-        .auth-root, .auth-root * {
-          color-scheme: light !important;
-        }
-        /* Force input/textarea/select to always render light */
+        .auth-root, .auth-root * { color-scheme: light !important; }
         .auth-root input,
         .auth-root textarea,
         .auth-root select {
@@ -76,15 +55,15 @@ export default function AuthPage() {
           color: #111827 !important;
           border-color: #e5e7eb !important;
           -webkit-text-fill-color: #111827 !important;
+          /* ✅ Prevent iOS from zooming in on input focus (font-size < 16px triggers zoom) */
+          font-size: 16px !important;
         }
-        /* Placeholder always visible */
         .auth-root input::placeholder,
         .auth-root textarea::placeholder {
           color: #9ca3af !important;
           opacity: 1 !important;
           -webkit-text-fill-color: #9ca3af !important;
         }
-        /* Autofill — browsers override bg on autofill, this forces it back */
         .auth-root input:-webkit-autofill,
         .auth-root input:-webkit-autofill:hover,
         .auth-root input:-webkit-autofill:focus,
@@ -94,23 +73,38 @@ export default function AuthPage() {
           -webkit-text-fill-color: #111827 !important;
           caret-color: #111827 !important;
         }
-        /* Card background */
-        .auth-card {
-          background-color: #ffffff !important;
-        }
-        /* Page background gradient */
+        .auth-card { background-color: #ffffff !important; }
         .auth-bg {
           background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #fdf2f8 100%) !important;
         }
+        /* ✅ Ensure full height fills screen on iOS Safari */
+        .auth-scroll {
+          min-height: 100vh;
+          min-height: -webkit-fill-available;
+        }
+        /* ✅ Tab buttons — minimum 44px tap target (Apple HIG) */
+        .auth-tab-btn {
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
       `}</style>
 
-      <div className="auth-root auth-bg w-full min-h-screen absolute inset-0 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md relative z-10">
+      {/*
+        ✅ MOBILE FIX: overflow-y-auto + min-h allows scrolling on short screens.
+        justify-start on mobile (content starts top), justify-center on desktop.
+        Safe area padding handles iPhone notch / home bar.
+      */}
+      <div className="auth-root auth-bg auth-scroll w-full overflow-y-auto flex flex-col items-center justify-start sm:justify-center"
+        style={{ paddingTop: 'max(24px, env(safe-area-inset-top))', paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}>
 
-          {/* Header */}
-          <div className="text-center mb-12">
-            <Link href="/" className="inline-flex items-center space-x-2 mb-8">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+        <div className="w-full max-w-md px-4 py-4 sm:py-8">
+
+          {/* ── Logo ── */}
+          <div className="flex justify-center mb-6 sm:mb-8">
+            <Link href="/" className="inline-flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: 'linear-gradient(135deg, #2563eb, #7c3aed)' }}>
                 <span style={{ color: '#ffffff', fontWeight: 800, fontSize: '18px' }}>CA</span>
               </div>
@@ -118,78 +112,72 @@ export default function AuthPage() {
                 Campus Arena
               </span>
             </Link>
-
-            {/* Tab Navigation */}
-            <div className="flex gap-3 mb-8">
-              <button
-                onClick={() => handleTabChange('signup')}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  fontWeight: 600,
-                  borderRadius: '9999px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '15px',
-                  transition: 'all 0.2s',
-                  background: activeTab === 'signup'
-                    ? 'linear-gradient(to right, #2563eb, #7c3aed)'
-                    : '#ffffff',
-                  color: activeTab === 'signup' ? '#ffffff' : '#4b5563',
-                  boxShadow: activeTab === 'signup'
-                    ? '0 4px 14px rgba(99,102,241,0.35)'
-                    : '0 0 0 1.5px #e5e7eb',
-                }}
-              >
-                Sign Up
-              </button>
-              <button
-                onClick={() => handleTabChange('login')}
-                style={{
-                  flex: 1,
-                  padding: '10px 0',
-                  fontWeight: 600,
-                  borderRadius: '9999px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '15px',
-                  transition: 'all 0.2s',
-                  background: activeTab === 'login'
-                    ? 'linear-gradient(to right, #2563eb, #7c3aed)'
-                    : '#ffffff',
-                  color: activeTab === 'login' ? '#ffffff' : '#4b5563',
-                  boxShadow: activeTab === 'login'
-                    ? '0 4px 14px rgba(99,102,241,0.35)'
-                    : '0 0 0 1.5px #e5e7eb',
-                }}
-              >
-                Log In
-              </button>
-            </div>
-
-            {/* Progress dots */}
-            {activeTab === 'signup' && (
-              <div className="flex gap-2 justify-center mb-12">
-                {[1, 2, 3].map((step) => {
-                  const state = getProgressCircle(step as SignUpStep)
-                  return (
-                    <div
-                      key={step}
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        background: state === 'empty' ? '#d1d5db' : '#4f46e5',
-                        transition: 'all 0.3s',
-                      }}
-                    />
-                  )
-                })}
-              </div>
-            )}
           </div>
 
-          {/* Tab Content — wrapped in auth-card for forced white bg */}
+          {/* ── Tab Navigation ── */}
+          <div className="flex gap-3 mb-5 sm:mb-6">
+            <button
+              onClick={() => handleTabChange('signup')}
+              className="auth-tab-btn flex-1 font-semibold rounded-full transition-all"
+              style={{
+                padding: '10px 0',
+                fontSize: '15px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeTab === 'signup'
+                  ? 'linear-gradient(to right, #2563eb, #7c3aed)'
+                  : '#ffffff',
+                color: activeTab === 'signup' ? '#ffffff' : '#4b5563',
+                boxShadow: activeTab === 'signup'
+                  ? '0 4px 14px rgba(99,102,241,0.35)'
+                  : '0 0 0 1.5px #e5e7eb',
+              }}
+            >
+              Sign Up
+            </button>
+            <button
+              onClick={() => handleTabChange('login')}
+              className="auth-tab-btn flex-1 font-semibold rounded-full transition-all"
+              style={{
+                padding: '10px 0',
+                fontSize: '15px',
+                border: 'none',
+                cursor: 'pointer',
+                background: activeTab === 'login'
+                  ? 'linear-gradient(to right, #2563eb, #7c3aed)'
+                  : '#ffffff',
+                color: activeTab === 'login' ? '#ffffff' : '#4b5563',
+                boxShadow: activeTab === 'login'
+                  ? '0 4px 14px rgba(99,102,241,0.35)'
+                  : '0 0 0 1.5px #e5e7eb',
+              }}
+            >
+              Log In
+            </button>
+          </div>
+
+          {/* ── Progress dots (signup only) — compact on mobile ── */}
+          {activeTab === 'signup' && (
+            <div className="flex gap-2 justify-center mb-5 sm:mb-8">
+              {[1, 2, 3].map((step) => {
+                const state = getProgressCircle(step as SignUpStep)
+                return (
+                  <div
+                    key={step}
+                    style={{
+                      width: state === 'active' ? '20px' : '8px',
+                      height: '8px',
+                      borderRadius: '999px',
+                      background: state === 'empty' ? '#d1d5db' : '#4f46e5',
+                      transition: 'all 0.3s ease',
+                    }}
+                  />
+                )
+              })}
+            </div>
+          )}
+
+          {/* ── Card ── */}
           <div className="auth-card" style={{ borderRadius: '20px', overflow: 'hidden' }}>
             {activeTab === 'signup' ? (
               <SignUpTab
@@ -205,6 +193,8 @@ export default function AuthPage() {
             )}
           </div>
 
+          {/* ✅ Bottom safe area spacer for iPhone home bar */}
+          <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} />
         </div>
       </div>
     </div>

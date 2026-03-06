@@ -5,10 +5,9 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-// Allow larger body for compressed group avatar images
-export const config = {
-  api: { bodyParser: { sizeLimit: '2mb' } },
-}
+// ✅ Body size limit is now set in next.config.ts via experimental.serverBodySizeLimit
+// The old `export const config = { api: { bodyParser: ... } }` was Pages Router syntax
+// and was silently ignored in App Router — so it was never actually doing anything.
 
 export async function PATCH(
   request: Request,
