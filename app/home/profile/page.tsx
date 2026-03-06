@@ -118,7 +118,7 @@ function MajorDropdown({ value, onChange, error }: {
               <input ref={inputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="Type to search majors..."
                 className="w-full pl-9 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:bg-white"
-                style={{ fontSize: 16 }} />
+                style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
             </div>
           </div>
           <div className="max-h-[240px] overflow-y-auto">
@@ -509,18 +509,18 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
               <FormField label="First Name" required error={errors.firstName}>
                 <input type="text" value={editForm.firstName} onChange={(e) => updateField('firstName', e.target.value)}
-                  placeholder="John" className={inputClass(errors.firstName)} style={{ fontSize: 16 }} />
+                  placeholder="John" className={inputClass(errors.firstName)} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </FormField>
               <FormField label="Last Name" required error={errors.lastName}>
                 <input type="text" value={editForm.lastName} onChange={(e) => updateField('lastName', e.target.value)}
-                  placeholder="Doe" className={inputClass(errors.lastName)} style={{ fontSize: 16 }} />
+                  placeholder="Doe" className={inputClass(errors.lastName)} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </FormField>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
               <FormField label="Degree" required error={errors.degree}>
                 <select value={editForm.degree} onChange={(e) => { updateField('degree', e.target.value); updateField('academicStanding', '') }}
-                  className={inputClass(errors.degree) + ' bg-white'} style={{ fontSize: 16 }}>
+                  className={inputClass(errors.degree) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
                   <option value="">Select degree</option>
                   <option value="Undergraduate">Undergraduate</option>
                   <option value="Graduate">Graduate</option>
@@ -536,7 +536,7 @@ export default function ProfilePage() {
               <div className="mb-5">
                 <FormField label="Enter your degree" required error={errors.customDegree}>
                   <input type="text" value={editForm.customDegree} onChange={(e) => updateField('customDegree', e.target.value)}
-                    placeholder="e.g., Doctorate, Post-Baccalaureate" className={inputClass(errors.customDegree)} style={{ fontSize: 16 }} />
+                    placeholder="e.g., Doctorate, Post-Baccalaureate" className={inputClass(errors.customDegree)} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
                 </FormField>
               </div>
             )}
@@ -545,7 +545,7 @@ export default function ProfilePage() {
               <div className="mb-5">
                 <FormField label="Enter your major" required error={errors.customMajor}>
                   <input type="text" value={editForm.customMajor} onChange={(e) => updateField('customMajor', e.target.value)}
-                    placeholder="Enter full abbreviation of your major" className={inputClass(errors.customMajor)} style={{ fontSize: 16 }} />
+                    placeholder="Enter full abbreviation of your major" className={inputClass(errors.customMajor)} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
                 </FormField>
               </div>
             )}
@@ -553,7 +553,7 @@ export default function ProfilePage() {
             <div className="mb-5">
               <FormField label="Minor" optional>
                 <input type="text" value={editForm.minor} onChange={(e) => updateField('minor', e.target.value)}
-                  placeholder="e.g., Statistics" className={inputClass()} style={{ fontSize: 16 }} />
+                  placeholder="e.g., Statistics" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </FormField>
             </div>
 
@@ -561,7 +561,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
               <FormField label="Enrollment Semester" required error={errors.semester}>
                 <select value={editForm.semester} onChange={(e) => updateField('semester', e.target.value)}
-                  className={inputClass(errors.semester) + ' bg-white'} style={{ fontSize: 16 }}>
+                  className={inputClass(errors.semester) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
                   <option value="">Select</option>
                   <option value="Fall">Fall</option>
                   <option value="Spring">Spring</option>
@@ -570,7 +570,7 @@ export default function ProfilePage() {
               </FormField>
               <FormField label="Enrollment Year" required error={errors.year}>
                 <select value={editForm.year} onChange={(e) => updateField('year', e.target.value)}
-                  className={inputClass(errors.year) + ' bg-white'} style={{ fontSize: 16 }}>
+                  className={inputClass(errors.year) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
                   <option value="">Select</option>
                   {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
@@ -578,7 +578,7 @@ export default function ProfilePage() {
               {(editForm.degree === 'Undergraduate' || editForm.degree === 'Graduate') && (
                 <FormField label="Academic Standing" required error={errors.academicStanding}>
                   <select value={editForm.academicStanding} onChange={(e) => updateField('academicStanding', e.target.value)}
-                    className={inputClass(errors.academicStanding) + ' bg-white'} style={{ fontSize: 16 }}>
+                    className={inputClass(errors.academicStanding) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
                     <option value="">Select</option>
                     {standingOptions.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
@@ -589,7 +589,7 @@ export default function ProfilePage() {
             <div className="mb-5">
               <FormField label="Hometown" optional>
                 <input type="text" value={editForm.hometown} onChange={(e) => updateField('hometown', e.target.value)}
-                  placeholder="City, Country" className={inputClass()} style={{ fontSize: 16 }} />
+                  placeholder="City, Country" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </FormField>
             </div>
 
@@ -597,7 +597,7 @@ export default function ProfilePage() {
               <FormField label="Bio" optional>
                 <textarea value={editForm.bio} onChange={(e) => updateField('bio', e.target.value)}
                   placeholder="I am good at music, love hiking on weekends..." rows={3}
-                  className={inputClass() + ' resize-none'} style={{ fontSize: 16 }} />
+                  className={inputClass() + ' resize-none'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </FormField>
             </div>
 
@@ -652,7 +652,11 @@ function FormField({ label, required, optional, error, children }: {
 }
 
 function inputClass(error?: string) {
-  return `w-full px-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all ${
+  // ✅ Explicit bg-white + text-gray-900 + color-scheme:light prevents browser dark mode
+  // from making text invisible (white text on white bg or dark bg with dark text).
+  // This must be hardcoded via style — Tailwind classes alone can be overridden by
+  // the user's OS/browser theme if the browser injects its own color scheme.
+  return `w-full px-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all text-gray-900 bg-white ${
     error ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
   }`
 }

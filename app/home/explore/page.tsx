@@ -114,7 +114,7 @@ export default function ExploreClassmatesPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, major, or interest..."
               className="w-full pl-10 pr-4 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-900"
-              style={{ height: 44, fontSize: 16 }}
+              style={{ height: 44, fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}
             />
           </div>
           {/* Filters row — side-by-side on mobile too */}
@@ -124,6 +124,7 @@ export default function ExploreClassmatesPage() {
               onChange={(e) => setMajorFilter(e.target.value)}
               className="flex-1 sm:flex-none px-3 sm:px-4 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none"
               style={{
+                colorScheme: 'light', color: '#111827', backgroundColor: 'white',
                 height: 44, fontSize: 16, minWidth: 0,
                 paddingRight: 28,
                 backgroundImage: chevronSvg,
@@ -139,6 +140,7 @@ export default function ExploreClassmatesPage() {
               onChange={(e) => setYearFilter(e.target.value)}
               className="flex-1 sm:flex-none px-3 sm:px-4 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 appearance-none"
               style={{
+                colorScheme: 'light', color: '#111827', backgroundColor: 'white',
                 height: 44, fontSize: 16, minWidth: 0,
                 paddingRight: 28,
                 backgroundImage: chevronSvg,

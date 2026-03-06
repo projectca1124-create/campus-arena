@@ -380,7 +380,7 @@ export default function CampusTalksPage() {
                           </div>
                           <textarea value={editResponseContent} onChange={e => setEditResponseContent(e.target.value)}
                             rows={3} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
-                            style={{ fontSize: 16 }} />
+                            style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
                           <div className="flex justify-end gap-2">
                             <button onClick={() => { setEditingResponseId(null); setEditResponseContent('') }}
                               className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg font-medium" style={{ minHeight: 40 }}>Cancel</button>
@@ -463,7 +463,7 @@ export default function CampusTalksPage() {
                     placeholder="Write your response..."
                     rows={1}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-[13px] resize-none placeholder-gray-400 bg-gray-50/50 focus:bg-white transition-all leading-relaxed"
-                    style={{ minHeight: 44, maxHeight: 120, fontSize: 16 }}
+                    style={{ minHeight: 44, maxHeight: 120, fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}
                     disabled={isSendingResponse}
                   />
                 </div>
@@ -519,14 +519,14 @@ export default function CampusTalksPage() {
                   type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   placeholder="Search discussions..."
                   className="w-full pl-9 pr-4 bg-white border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
-                  style={{ height: 44, fontSize: 16 }}
+                  style={{ height: 44, fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}
                 />
               </div>
               <div className="relative">
                 <select
                   value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
                   className="appearance-none w-full sm:w-auto pl-4 pr-9 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 cursor-pointer"
-                  style={{ height: 44, fontSize: 16 }}
+                  style={{ height: 44, fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}
                 >
                   <option value="">All Categories</option>
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -668,7 +668,7 @@ export default function CampusTalksPage() {
                 <div className="relative">
                   <select value={askForm.category} onChange={e => setAskForm(p => ({ ...p, category: e.target.value }))}
                     className="appearance-none w-full px-4 py-3 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 cursor-pointer"
-                    style={{ fontSize: 16 }}>
+                    style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
                     {DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -680,7 +680,7 @@ export default function CampusTalksPage() {
                   onChange={e => { setAskForm(p => ({ ...p, title: e.target.value })); if (askErrors.title) setAskErrors({}) }}
                   placeholder="e.g., Best study spots on campus?"
                   className={`w-full px-4 py-3 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 ${askErrors.title ? 'border-red-300' : 'border-gray-200'}`}
-                  style={{ fontSize: 16 }} />
+                  style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
                 {askErrors.title && <p className="text-xs text-red-500 mt-1">{askErrors.title}</p>}
               </div>
               <div>
@@ -688,7 +688,7 @@ export default function CampusTalksPage() {
                 <textarea value={askForm.content} onChange={e => setAskForm(p => ({ ...p, content: e.target.value }))}
                   placeholder="Add more context..." rows={3}
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
-                  style={{ fontSize: 16 }} />
+                  style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </div>
             </div>
             <div className="flex gap-3 px-5 pt-4">
@@ -718,7 +718,7 @@ export default function CampusTalksPage() {
                 <div className="relative">
                   <select value={editQuestionForm.category} onChange={e => setEditQuestionForm(p => ({ ...p, category: e.target.value }))}
                     className="appearance-none w-full px-4 py-3 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                    style={{ fontSize: 16 }}>
+                    style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
                     {DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -728,13 +728,13 @@ export default function CampusTalksPage() {
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Question <span className="text-red-500">*</span></label>
                 <input type="text" value={editQuestionForm.title} onChange={e => setEditQuestionForm(p => ({ ...p, title: e.target.value }))}
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-                  style={{ fontSize: 16 }} />
+                  style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Details <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
                 <textarea value={editQuestionForm.content} onChange={e => setEditQuestionForm(p => ({ ...p, content: e.target.value }))}
                   rows={3} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none"
-                  style={{ fontSize: 16 }} />
+                  style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
               </div>
             </div>
             <div className="flex gap-3 px-5 pt-4">

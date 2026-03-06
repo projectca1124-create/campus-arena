@@ -2617,8 +2617,8 @@ export default function HomePage() {
             </div>
             <span className="text-[10px] font-semibold text-gray-400">Talks</span>
           </button>
-          {/* Profile/Logout tab */}
-          <button onClick={() => setShowLogoutModal(true)} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
+          {/* ✅ FIX: Profile tab navigates to /home/profile, NOT logout */}
+          <button onClick={() => router.push('/home/profile')} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
             <div className="p-1.5 rounded-xl">
               {user?.profileImage
                 ? <img src={user.profileImage} className="w-[22px] h-[22px] rounded-full object-cover" />
@@ -2626,6 +2626,13 @@ export default function HomePage() {
               }
             </div>
             <span className="text-[10px] font-semibold text-gray-400">Me</span>
+          </button>
+          {/* ✅ FIX: Separate Logout tab restored */}
+          <button onClick={() => setShowLogoutModal(true)} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
+            <div className="p-1.5 rounded-xl">
+              <LogOut className="w-[22px] h-[22px] text-gray-400" />
+            </div>
+            <span className="text-[10px] font-semibold text-gray-400">Logout</span>
           </button>
         </nav>
       )}

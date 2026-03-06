@@ -9,13 +9,14 @@ function generateInviteCode(): string {
 
 export async function POST(request: Request) {
   try {
-    const { name, description, userId, visibility } = await request.json()
+    // ✅ FIX: Added `icon` — was missing so group picture was silently dropped on creation
+    const { name, description, userId, visibility, icon } = await request.json()
 
     if (!name || !userId) {
       return Response.json({ error: 'name and userId are required' }, { status: 400 })
     }
 
-    console.log('🆕 Creating group:', name, 'by user:', userId, 'visibility:', visibility || 'public')
+    console.log('🆕 Creating group:', name, 'by user:', userId, 'visibility:', visibility || 'public', '| has icon:', !!icon)
 
     const user = await prisma.user.findUnique({ where: { id: userId } })
     if (!user) {
@@ -38,6 +39,8 @@ export async function POST(request: Request) {
       data: {
         name: name.trim(),
         description: description?.trim() || null,
+        // ✅ FIX: Save icon if provided during creation
+        icon: icon || null,
         type: 'custom',
         isDefault: false,
         visibility: groupVisibility,
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
       },
     })
 
-    console.log('✅ Group created:', group.id, group.name, '| visibility:', groupVisibility, '| invite:', inviteCode)
+    console.log('✅ Group created:', group.id, group.name, '| visibility:', groupVisibility, '| invite:', inviteCode, '| icon saved:', !!group.icon)
 
     return Response.json({ success: true, group })
   } catch (error) {
