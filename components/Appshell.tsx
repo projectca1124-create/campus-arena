@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { MessageSquare, Megaphone, LogOut, Lock, ArrowLeft } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
+import { usePushNotifications } from '@/lib/use-push-notifications'
 
 interface ShellUser {
   id: string
@@ -63,6 +64,9 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
   const router = useRouter()
   const pathname = usePathname()
   const [user, setUser] = useState<ShellUser | null>(null)
+
+  // OS-level push notifications — works when browser is closed/minimized
+  usePushNotifications(user?.id)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   useEffect(() => {

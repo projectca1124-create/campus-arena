@@ -1,8 +1,9 @@
 // lib/notifications.ts
-// Central helper: create a DB notification + push it via Ably instantly
+// Central hub: DB notification + Ably real-time ping + Web Push (OS-level, works when browser closed)
 
 import { PrismaClient } from '@prisma/client'
 import { publishEvent } from '@/lib/ably-server'
+import { sendPushToUser } from '@/lib/web-push'
 
 const prisma = new PrismaClient()
 
@@ -17,10 +18,12 @@ interface CreateNotificationParams {
 export async function createNotification(params: CreateNotificationParams) {
   const { userId, type, title, body, link } = params
   try {
+    // 1. Persist to DB (shows in bell icon)
     const notification = await prisma.notification.create({
       data: { userId, type, title, body, link: link || null, read: false },
     })
-    // Push instantly to the user's personal Ably channel
+
+    // 2. Real-time Ably push (instant if browser tab is open)
     await publishEvent(`user-${userId}`, 'new-notification', {
       id: notification.id,
       type: notification.type,
@@ -30,13 +33,21 @@ export async function createNotification(params: CreateNotificationParams) {
       read: false,
       createdAt: notification.createdAt.toISOString(),
     })
+
+    // 3. Web Push — OS-level notification (works when browser closed/backgrounded)
+    sendPushToUser(userId, {
+      title,
+      body,
+      url: link || '/home',
+      tag: type,
+    }).catch(() => {})
+
     return notification
   } catch (err) {
     console.error('createNotification error:', err)
   }
 }
 
-/** DM received */
 export async function notifyDM(
   receiverId: string,
   senderName: string,
@@ -46,13 +57,12 @@ export async function notifyDM(
   await createNotification({
     userId: receiverId,
     type: 'dm',
-    title: `💬 ${senderName}`,
+    title: `\u{1F4AC} ${senderName}`,
     body: preview,
-    link: `/home?openDM=${senderId}&dmName=${encodeURIComponent(senderName)}`,
+    link: `/home?openDM=${senderId}&dmName=${encodeURIComponent(senderName)}&tab=dms`,
   })
 }
 
-/** Group message sent — notifies all other members */
 export async function notifyGroupMessage(
   memberIds: string[],
   senderName: string,
@@ -65,7 +75,7 @@ export async function notifyGroupMessage(
       createNotification({
         userId: uid,
         type: 'message',
-        title: `👥 ${groupName}`,
+        title: `\u{1F465} ${groupName}`,
         body: `${senderName}: ${preview}`,
         link: `/home?groupId=${groupId}`,
       })
@@ -73,7 +83,6 @@ export async function notifyGroupMessage(
   )
 }
 
-/** Someone responded to a campus talk question */
 export async function notifyTalkResponse(
   talkId: string,
   responderId: string,
@@ -85,12 +94,11 @@ export async function notifyTalkResponse(
       select: { userId: true, title: true },
     })
     if (!talk || talk.userId === responderId) return
-
     await createNotification({
       userId: talk.userId,
       type: 'campus_talk',
-      title: `🎓 New Response`,
-      body: `${responderName} responded: "${talk.title.substring(0, 55)}${talk.title.length > 55 ? '…' : ''}"`,
+      title: `\u{1F393} New Response`,
+      body: `${responderName} responded to: "${talk.title.substring(0, 55)}${talk.title.length > 55 ? '\u2026' : ''}"`,
       link: `/home/campus-talks?thread=${talkId}`,
     })
   } catch (err) {

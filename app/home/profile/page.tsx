@@ -354,13 +354,62 @@ export default function ProfilePage() {
         || file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')
 
       if (isHEIC) {
+        // Try heic2any library first (best quality)
+        let converted = false
         try {
           const heic2any = (await import('heic2any')).default
-          const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
-          fileToCompress = Array.isArray(converted) ? converted[0] : converted
+          const result = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 })
+          fileToCompress = Array.isArray(result) ? result[0] : result
+          converted = true
         } catch {
-          setImageUploadError("Couldn't convert this iPhone photo. Try sharing it as JPG from your Photos app first.")
-          return
+          // heic2any failed or not installed — try native browser decoding
+          // Modern Chrome/Edge can decode HEIC natively via canvas
+        }
+
+        if (!converted) {
+          // Fallback: create an object URL and let the browser decode it
+          // Works in Chrome 105+ and Safari (which supports HEIC natively)
+          try {
+            const objectUrl = URL.createObjectURL(file)
+            const img = new Image()
+            await new Promise<void>((resolve, reject) => {
+              img.onload = () => resolve()
+              img.onerror = () => reject(new Error('Browser cannot decode this image format'))
+              img.src = objectUrl
+            })
+            // Browser decoded it — draw to canvas to get JPEG
+            const canvas = document.createElement('canvas')
+            const MAX = 800
+            const scale = Math.min(1, MAX / img.width, MAX / img.height)
+            canvas.width = Math.round(img.width * scale)
+            canvas.height = Math.round(img.height * scale)
+            const ctx = canvas.getContext('2d')!
+            ctx.fillStyle = '#ffffff'
+            ctx.fillRect(0, 0, canvas.width, canvas.height)
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            URL.revokeObjectURL(objectUrl)
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+            // Save to DB directly from here
+            const res = await fetch('/api/profile', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.id, profileImage: dataUrl }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              setUser(prev => prev ? { ...prev, profileImage: data.user.profileImage } : prev)
+              const stored = JSON.parse(localStorage.getItem('user') || '{}')
+              localStorage.setItem('user', JSON.stringify({ ...stored, profileImage: data.user.profileImage }))
+              window.dispatchEvent(new Event('userUpdated'))
+            } else {
+              setImageUploadError('Upload failed. Please try again.')
+            }
+            return
+          } catch {
+            // Nothing worked — give a helpful message
+            setImageUploadError("This image format isn't supported by your browser. Please take a screenshot of the photo and upload that instead.")
+            return
+          }
         }
       }
 
