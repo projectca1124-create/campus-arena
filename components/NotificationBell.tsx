@@ -2,7 +2,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Bell, Trash2, MessageSquare, MessageCircle, Megaphone, Users } from 'lucide-react'
 import { getAblyClient } from '@/lib/ably-client'
 
@@ -37,6 +37,7 @@ function getNotifIcon(type: string) {
 
 export default function NotificationBell({ userId }: { userId: string }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
@@ -44,7 +45,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [isClearing, setIsClearing] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // ── Close dropdown on outside click ──
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -55,7 +55,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  // ── Fetch existing notifications on mount ──
   const fetchNotifications = async () => {
     if (!userId) return
     try {
@@ -73,11 +72,9 @@ export default function NotificationBell({ userId }: { userId: string }) {
     fetchNotifications()
   }, [userId])
 
-  // ── Ably: subscribe to real-time new-notification events ──
   useEffect(() => {
     if (!userId) return
     let channel: any = null
-
     let mounted = true
 
     const handler = (msg: any) => {
@@ -92,13 +89,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
     const setup = async () => {
       try {
-        const ably = getAblyClient(userId)  // pass userId so auth works for fresh signup
+        const ably = getAblyClient(userId)
         channel = ably.channels.get(`user-${userId}`)
         if (!mounted) return
-        // Attach listener directly — Ably deduplicates identical listeners
         channel.subscribe('new-notification', handler)
       } catch (err) {
-        // Suppress dev-mode Strict Mode detach race — not a prod issue
         if (process.env.NODE_ENV !== 'production') return
         console.error('Ably notification subscription error:', err)
       }
@@ -109,15 +104,11 @@ export default function NotificationBell({ userId }: { userId: string }) {
     return () => {
       mounted = false
       try {
-        if (channel) {
-          // Only remove our specific handler, never detach the channel
-          channel.unsubscribe('new-notification', handler)
-        }
+        if (channel) channel.unsubscribe('new-notification', handler)
       } catch {}
     }
   }, [userId])
 
-  // ── Open bell: mark all as read ──
   const handleOpen = async () => {
     const opening = !isOpen
     setIsOpen(opening)
@@ -136,25 +127,65 @@ export default function NotificationBell({ userId }: { userId: string }) {
     }
   }
 
-  // ── Click notification → navigate ──
   const handleNotificationClick = (n: Notification) => {
-    setIsOpen(false); setShowAll(false)
-    // All notifications have n.link set by createNotification helpers:
-    // DM:          /home?openDM=<senderId>&dmName=<name>&tab=dms
-    // Group msg:   /home (with groupId if applicable)
-    // Campus talk: /home/campus-talks?thread=<talkId>
-    if (n.link) {
+    setIsOpen(false)
+    setShowAll(false)
+
+    if (!n.link) {
+      if (n.type === 'dm') router.push('/home?tab=dms')
+      else if (n.type === 'campus_talk') router.push('/home/campus-talks')
+      else router.push('/home')
+      return
+    }
+
+    const linkUrl = new URL(n.link, window.location.origin)
+    const isAlreadyOnHome = pathname === '/home'
+    const isHomeLink = linkUrl.pathname === '/home'
+
+    // Different page (e.g. campus-talks) — just navigate normally
+    if (!isHomeLink) {
       router.push(n.link)
       return
     }
-    // Fallback
-    if (n.type === 'dm') router.push('/home?tab=dms')
-    else if (n.type === 'message') router.push('/home')
-    else if (n.type === 'campus_talk') router.push('/home/campus-talks')
-    else router.push('/home')
+
+    // Already on /home — router.push() won't re-trigger the URL param useEffect.
+    // Fire a custom window event that page.tsx listens to directly.
+    if (isAlreadyOnHome) {
+      const params = linkUrl.searchParams
+      const openDMId = params.get('openDM')
+      const groupId = params.get('groupId')
+
+      if (openDMId) {
+        window.dispatchEvent(new CustomEvent('notification-navigate', {
+          detail: {
+            type: 'dm',
+            userId: openDMId,
+            dmName: params.get('dmName') || '',
+          }
+        }))
+        return
+      }
+
+      if (groupId) {
+        window.dispatchEvent(new CustomEvent('notification-navigate', {
+          detail: { type: 'group', groupId }
+        }))
+        return
+      }
+
+      // Fallback — tab switch
+      if (n.type === 'dm') {
+        window.dispatchEvent(new CustomEvent('notification-navigate', {
+          detail: { type: 'tab', tab: 'dms' }
+        }))
+      }
+      return
+    }
+
+    // On a different page, navigating to /home — normal push, useEffect will read params
+    router.push(n.link)
   }
 
-  // ── Clear all ──
   const handleClearAll = async () => {
     setIsClearing(true)
     try {
@@ -172,7 +203,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bell button */}
       <button onClick={handleOpen}
         className="relative p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-all">
         <Bell className="w-5 h-5" />
@@ -189,7 +219,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <div className="absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
           style={{ width: showAll ? 380 : 340, boxShadow: '0 10px 40px rgba(0,0,0,0.12)', transition: 'width 0.2s ease' }}>
 
-          {/* Header */}
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-900">
               Notifications
@@ -206,7 +235,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
             )}
           </div>
 
-          {/* Notification list */}
           <div style={{ maxHeight: showAll ? 420 : 300, overflowY: 'auto', transition: 'max-height 0.3s ease' }}>
             {displayedNotifications.length > 0 ? (
               displayedNotifications.map(n => (
@@ -236,7 +264,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
             )}
           </div>
 
-          {/* Footer */}
           {notifications.length > 5 && (
             <div className="px-4 py-2.5 border-t border-gray-100 text-center">
               <button onClick={() => setShowAll(!showAll)}

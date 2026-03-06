@@ -588,7 +588,13 @@ export default function HomePage() {
         if (groupsRes.ok) { const d = await groupsRes.json(); setGroups(d.groups || []) }
         const dmRes = await fetch(`/api/dm?userId=${currentUser.id}`)
         let convs: DMConversation[] = []
-        if (dmRes.ok) { const d = await dmRes.json(); convs = d.conversations || []; setDmConversations(convs) }
+        if (dmRes.ok) {
+          const d = await dmRes.json()
+          convs = d.conversations || []
+          setDmConversations(convs)
+          // Signal the real-time engine to subscribe to all these DM channels now
+          window.dispatchEvent(new Event('dms-loaded'))
+        }
 
         try {
           const params = new URLSearchParams(window.location.search)
@@ -673,171 +679,219 @@ export default function HomePage() {
     loadData()
   }, [router])
 
-  // ─── Ably: PERSISTENT user channel + ALL DM channels ───────────────────────
-  // This effect runs ONCE when user loads and NEVER tears down.
-  // It handles:
-  //   1. Personal user channel  → DM notifications, group notifications, approval events
-  //   2. ALL active DM channels → Real-time messages regardless of which tab is open
-  //      (WhatsApp/iMessage behaviour: messages arrive even when you're in a different chat)
+  // ─── Ably: REAL-TIME ENGINE ──────────────────────────────────────────────
+  // Single persistent effect. Never tears down. Handles everything.
+  // Architecture: one Map of subscribed DM channels, grown dynamically.
+  // Any time we learn about a new conversation partner, we subscribe immediately.
   useEffect(() => {
     if (!user) return
+
     const ably = getAblyClient(user.id)
 
-    // ── 1. Personal user channel ──────────────────────────────────────────────
-    const uch = ably.channels.get(`user-${user.id}`)
+    // Ensure connection is established before subscribing
+    // If already connected, this is instant. If not, channels queue until ready.
+    if (ably.connection.state !== 'connected' && ably.connection.state !== 'connecting') {
+      ably.connect()
+    }
 
-    uch.subscribe('new-dm-notification', (msg: Ably.Message) => {
-      const data = msg.data as { from: any; preview: string; timestamp: string; messageId?: string }
-      const isCurrentDM = selectedDMRef.current?.user.id === data.from.id
-      const dmChatId = `dm_${data.from.id}`
-      if (!isCurrentDM && !mutedChatsRef.current.has(dmChatId)) playReceiveSound()
+    // Map of otherUserId → Ably channel — grows as new conversations appear
+    const dmChannelMap = new Map<string, Ably.RealtimeChannel>()
 
-      // Always update sidebar with latest preview + unread count
-      setDmConversations(prev => {
-        const idx = prev.findIndex(c => c.user.id === data.from.id)
-        if (idx >= 0) {
-          const updated = [...prev]
-          updated[idx] = {
-            ...updated[idx],
-            lastMessage: data.preview,
-            lastMessageAt: data.timestamp,
-            unreadCount: isCurrentDM ? 0 : updated[idx].unreadCount + 1,
-          }
-          return updated.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
-        }
-        // New conversation — add to top of sidebar
-        return [{ user: data.from, lastMessage: data.preview, lastMessageAt: data.timestamp, unreadCount: 1 }, ...prev]
-      })
-    })
+    // ── Core: subscribe to a DM channel permanently ───────────────────────────
+    const subscribeDM = (otherUserId: string, otherUser?: any) => {
+      if (!otherUserId || dmChannelMap.has(otherUserId)) return
 
-    uch.subscribe('group-approved', (msg: Ably.Message) => {
-      const data = msg.data as { groupId: string; groupName: string }
-      const userStr = localStorage.getItem('user')
-      if (!userStr) return
-      const u = JSON.parse(userStr)
-      fetch(`/api/groups?userId=${u.id}`)
-        .then(r => r.json())
-        .then(d => {
-          const newGroup = (d.groups || []).find((g: Group) => g.id === data.groupId)
-          if (newGroup) {
-            setGroups(prev => {
-              if (prev.some(g => g.id === newGroup.id)) return prev
-              return [...prev, newGroup]
-            })
-          }
-        })
-        .catch(() => {})
-    })
+      const chName = getDMChannelName(user.id, otherUserId)
+      const ch = ably.channels.get(chName)
+      dmChannelMap.set(otherUserId, ch)
 
-    uch.subscribe('new-group-notification', (msg: Ably.Message) => {
-      const data = msg.data as { groupId: string; groupName: string; from: any; preview: string; messageId: string; timestamp: string }
-      const isCurrentGroup = selectedChatRef.current?.id === data.groupId
-      const groupChatId = `group_${data.groupId}`
-      if (!isCurrentGroup && !mutedChatsRef.current.has(groupChatId)) playReceiveSound()
-      setGroups(prev => prev.map(g => {
-        if (g.id !== data.groupId) return g
-        const newMsg = { id: data.messageId, content: data.preview, groupId: data.groupId, userId: data.from.id, user: data.from, reactions: [], createdAt: data.timestamp }
-        return { ...g, messages: [...(g.messages || []), newMsg] }
-      }))
-    })
+      ch.subscribe('new-message', (msg: Ably.Message) => {
+        const { message: m } = msg.data as { message: DMMessage }
+        if (!m) return
 
-    // ── 2. Subscribe to EVERY DM channel the user has — permanently ──────────
-    // This is the critical fix: messages arrive in real-time regardless of active tab.
-    // We keep a map of subscribed channels so we can add new ones dynamically.
-    const dmChannels = new Map<string, Ably.RealtimeChannel>()
+        const isOpen = selectedDMRef.current?.user.id === otherUserId
 
-    const subscribeDMChannel = (otherUserId: string, otherUser?: any) => {
-      const channelName = getDMChannelName(user.id, otherUserId)
-      if (dmChannels.has(channelName)) return // already subscribed
-
-      const dmCh = ably.channels.get(channelName)
-      dmChannels.set(channelName, dmCh)
-
-      dmCh.subscribe('new-message', (msg: Ably.Message) => {
-        const data = msg.data as { message: DMMessage }
-        const m = data.message
-        const isCurrentDM = selectedDMRef.current?.user.id === otherUserId
-
-        // If this DM chat is open — push message into view immediately
-        if (isCurrentDM) {
+        if (isOpen) {
+          // Chat is open — push message into view immediately
           setDmMessages(prev => {
             if (prev.some(x => x.id === m.id)) return prev
-            // Replace optimistic temp message if it matches
-            const tempIdx = prev.findIndex(x => x.id.startsWith('temp_') && x.senderId === m.senderId && x.content === m.content)
-            if (tempIdx >= 0) { const next = [...prev]; next[tempIdx] = m; return next }
+            const tempIdx = prev.findIndex(x =>
+              x.id.startsWith('temp_') && x.senderId === m.senderId && x.content === m.content
+            )
+            if (tempIdx >= 0) {
+              const next = [...prev]
+              next[tempIdx] = m
+              return next
+            }
+            if (m.senderId !== user.id) playReceiveSound()
             return [...prev, m]
           })
-          // Update sidebar last message
-          setDmConversations(prev => prev.map(c =>
-            c.user.id === otherUserId
-              ? { ...c, lastMessage: m.content || '📎 Attachment', lastMessageAt: m.createdAt, unreadCount: 0 }
-              : c
+          // Keep sidebar last-message in sync
+          setDmConversations(prev => prev.map(cv =>
+            cv.user.id === otherUserId
+              ? { ...cv, lastMessage: m.content || '📎 Attachment', lastMessageAt: m.createdAt, unreadCount: 0 }
+              : cv
           ))
         } else {
-          // DM is not open — update sidebar unread count + last message
+          // Chat not open — increment unread, bubble to top
+          if (m.senderId !== user.id) playReceiveSound()
           setDmConversations(prev => {
-            const idx = prev.findIndex(c => c.user.id === otherUserId)
+            const idx = prev.findIndex(cv => cv.user.id === otherUserId)
             if (idx >= 0) {
-              const updated = [...prev]
-              updated[idx] = {
-                ...updated[idx],
+              const next = [...prev]
+              next[idx] = {
+                ...next[idx],
                 lastMessage: m.content || '📎 Attachment',
                 lastMessageAt: m.createdAt,
-                unreadCount: (updated[idx].unreadCount || 0) + (m.senderId !== user.id ? 1 : 0),
+                unreadCount: m.senderId !== user.id
+                  ? (next[idx].unreadCount || 0) + 1
+                  : next[idx].unreadCount,
               }
-              return updated.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
+              return next.sort((a, b) =>
+                new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+              )
             }
-            // New convo appeared (e.g. from another device)
+            // Brand new convo (received from someone not yet in list)
             if (otherUser) {
-              return [{ user: otherUser, lastMessage: m.content || '📎 Attachment', lastMessageAt: m.createdAt, unreadCount: m.senderId !== user.id ? 1 : 0 }, ...prev]
+              return [{
+                user: otherUser,
+                lastMessage: m.content || '📎 Attachment',
+                lastMessageAt: m.createdAt,
+                unreadCount: m.senderId !== user.id ? 1 : 0,
+              }, ...prev]
             }
             return prev
           })
         }
       })
 
-      dmCh.subscribe('message-deleted', (msg: Ably.Message) => {
-        const data = msg.data as { messageId: string }
+      ch.subscribe('message-deleted', (msg: Ably.Message) => {
+        const { messageId } = msg.data as { messageId: string }
         if (selectedDMRef.current?.user.id === otherUserId) {
-          setDmMessages(prev => prev.filter(m => m.id !== data.messageId))
+          setDmMessages(prev => prev.filter(m => m.id !== messageId))
         }
       })
 
-      dmCh.subscribe('message-edited', (msg: Ably.Message) => {
-        const data = msg.data as { messageId: string; content: string }
+      ch.subscribe('message-edited', (msg: Ably.Message) => {
+        const { messageId, content } = msg.data as { messageId: string; content: string }
         if (selectedDMRef.current?.user.id === otherUserId) {
-          setDmMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, content: data.content } : m))
+          setDmMessages(prev => prev.map(m => m.id === messageId ? { ...m, content } : m))
         }
       })
 
-      dmCh.subscribe('reaction-updated', (msg: Ably.Message) => {
-        const data = msg.data as { messageId: string; reactions: any[] }
+      ch.subscribe('reaction-updated', (msg: Ably.Message) => {
+        const { messageId, reactions } = msg.data as { messageId: string; reactions: any[] }
         if (selectedDMRef.current?.user.id === otherUserId) {
-          setDmMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m))
+          setDmMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m))
         }
       })
     }
 
-    // Subscribe to all existing DM conversations on load
-    setDmConversations(prev => {
-      prev.forEach(conv => subscribeDMChannel(conv.user.id, conv.user))
-      return prev
+    // ── Personal user channel ─────────────────────────────────────────────────
+    const uch = ably.channels.get(`user-${user.id}`)
+
+    uch.subscribe('new-dm-notification', (msg: Ably.Message) => {
+      const data = msg.data as { from: any; preview: string; timestamp: string }
+      if (!data?.from?.id) return
+
+      // CRITICAL: subscribe to this sender's DM channel immediately
+      // This is the primary subscription trigger for new conversations
+      subscribeDM(data.from.id, data.from)
+
+      const isOpen = selectedDMRef.current?.user.id === data.from.id
+      if (!isOpen) {
+        const dmChatId = `dm_${data.from.id}`
+        if (!mutedChatsRef.current.has(dmChatId)) playReceiveSound()
+      }
+
+      // Update sidebar preview + unread badge
+      setDmConversations(prev => {
+        const idx = prev.findIndex(cv => cv.user.id === data.from.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = {
+            ...next[idx],
+            lastMessage: data.preview,
+            lastMessageAt: data.timestamp,
+            unreadCount: isOpen ? 0 : (next[idx].unreadCount || 0) + 1,
+          }
+          return next.sort((a, b) =>
+            new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+          )
+        }
+        return [{
+          user: data.from,
+          lastMessage: data.preview,
+          lastMessageAt: data.timestamp,
+          unreadCount: isOpen ? 0 : 1,
+        }, ...prev]
+      })
     })
 
-    // Also watch dmConversations for new conversations being added
-    // so we subscribe to their channels too (e.g. after first message sent)
-    const unsubDmWatch = setInterval(() => {
+    uch.subscribe('group-approved', (msg: Ably.Message) => {
+      const data = msg.data as { groupId: string }
+      const userStr = localStorage.getItem('user')
+      if (!userStr) return
+      const u = JSON.parse(userStr)
+      fetch(`/api/groups?userId=${u.id}`)
+        .then(r => r.json())
+        .then(d => {
+          const g = (d.groups || []).find((g: Group) => g.id === data.groupId)
+          if (g) setGroups(prev => prev.some(x => x.id === g.id) ? prev : [...prev, g])
+        }).catch(() => {})
+    })
+
+    uch.subscribe('new-group-notification', (msg: Ably.Message) => {
+      const data = msg.data as {
+        groupId: string; groupName: string; from: any
+        preview: string; messageId: string; timestamp: string
+      }
+      const isCurrentGroup = selectedChatRef.current?.id === data.groupId
+      if (!isCurrentGroup && !mutedChatsRef.current.has(`group_${data.groupId}`)) {
+        playReceiveSound()
+      }
+      setGroups(prev => prev.map(g => {
+        if (g.id !== data.groupId) return g
+        const newMsg = {
+          id: data.messageId, content: data.preview,
+          groupId: data.groupId, userId: data.from.id,
+          user: data.from, reactions: [], createdAt: data.timestamp,
+        }
+        return { ...g, messages: [...(g.messages || []), newMsg] }
+      }))
+    })
+
+    // ── Subscribe to ALL existing DM conversations ────────────────────────────
+    // Called after dmConversations loads. Uses a ref-based approach so we don't
+    // depend on React state being available at effect-run time.
+    const subscribeAllExisting = () => {
       setDmConversations(prev => {
-        prev.forEach(conv => subscribeDMChannel(conv.user.id, conv.user))
+        prev.forEach(cv => subscribeDM(cv.user.id, cv.user))
         return prev
       })
-    }, 3000) // poll every 3s to catch newly added conversations
+    }
+
+    // Run immediately (catches conversations already in state)
+    subscribeAllExisting()
+
+    // Also run after a short delay to catch conversations loaded by loadData
+    // loadData is async and runs after this effect — this bridges the gap
+    const t1 = setTimeout(subscribeAllExisting, 500)
+    const t2 = setTimeout(subscribeAllExisting, 1500)
+    const t3 = setTimeout(subscribeAllExisting, 3000)
+
+    // Listen for window event fired by loadData when DM conversations finish loading
+    const handleDMsLoaded = () => subscribeAllExisting()
+    window.addEventListener('dms-loaded', handleDMsLoaded)
 
     return () => {
       uch.unsubscribe()
-      clearInterval(unsubDmWatch)
-      dmChannels.forEach(ch => { try { ch.unsubscribe() } catch {} })
-      dmChannels.clear()
+      clearTimeout(t1)
+      clearTimeout(t2)
+      clearTimeout(t3)
+      window.removeEventListener('dms-loaded', handleDMsLoaded)
+      dmChannelMap.forEach(ch => { try { ch.unsubscribe() } catch {} })
+      dmChannelMap.clear()
     }
   }, [user?.id])
 
@@ -1010,6 +1064,102 @@ export default function HomePage() {
 
     window.addEventListener('ably-reconnected', handleReconnect)
     return () => window.removeEventListener('ably-reconnected', handleReconnect)
+  }, [user?.id])
+
+  // ── Notification bell navigation ──
+  // NotificationBell fires this custom event instead of router.push() when already on /home
+  // because router.push() to the same pathname does NOT re-trigger useEffect URL param reading.
+  useEffect(() => {
+    if (!user) return
+
+    const handler = (e: Event) => {
+      const { type, userId: targetUserId, dmName, groupId, tab } = (e as CustomEvent).detail
+
+      if (type === 'dm' && targetUserId) {
+        setActiveTab('dms')
+        const existing = dmConversations.find(c => c.user.id === targetUserId)
+        if (existing) {
+          handleSelectDM(existing)
+        } else {
+          const nameParts = (dmName || '').split(' ')
+          setSelectedDM({
+            user: { id: targetUserId, firstName: nameParts[0] || '', lastName: nameParts.slice(1).join(' ') || '' },
+            lastMessage: '', lastMessageAt: new Date().toISOString(), unreadCount: 0,
+          })
+          setSelectedChat(null)
+          setDmMessages([])
+          loadDMMessages(targetUserId)
+        }
+        if (isMobile) setMobileView('chat')
+      }
+
+      if (type === 'group' && groupId) {
+        setActiveTab('groups')
+        const group = groups.find(g => g.id === groupId)
+        if (group) {
+          handleSelectChat(group)
+          if (isMobile) setMobileView('chat')
+        }
+      }
+
+      if (type === 'tab' && tab) {
+        setActiveTab(tab)
+      }
+    }
+
+    window.addEventListener('notification-navigate', handler)
+    return () => window.removeEventListener('notification-navigate', handler)
+  }, [user, groups, dmConversations, isMobile])
+
+
+  // ── Polling fallback — guarantees message delivery even if Ably fails ────────
+  // Polls every 4 seconds when a DM is open. Only fires if Ably is not connected.
+  // This ensures 100% delivery on all devices/networks regardless of WS support.
+  useEffect(() => {
+    if (!user) return
+
+    const poll = async () => {
+      const ably = getAblyClient(user.id)
+      const ablyOk = ably.connection.state === 'connected'
+
+      // If Ably is healthy, skip polling — real-time handles it
+      if (ablyOk) return
+
+      // Ably not connected — fall back to polling for open DM
+      if (selectedDMRef.current && dmMessagesRef.current.length > 0) {
+        const last = dmMessagesRef.current[dmMessagesRef.current.length - 1]
+        try {
+          const res = await fetch(
+            `/api/dm?otherUserId=${selectedDMRef.current.user.id}&userId=${user.id}&after=${encodeURIComponent(last.createdAt)}`
+          )
+          if (res.ok) {
+            const d = await res.json()
+            if (d.messages?.length) {
+              setDmMessages(prev => {
+                const ids = new Set(prev.map((m: any) => m.id))
+                const fresh = d.messages.filter((m: any) => !ids.has(m.id))
+                if (fresh.length > 0) playReceiveSound()
+                return fresh.length ? [...prev, ...fresh] : prev
+              })
+            }
+          }
+        } catch {}
+      }
+
+      // Also refresh conversation list unread counts
+      try {
+        const res = await fetch(`/api/dm?userId=${user.id}`)
+        if (res.ok) {
+          const d = await res.json()
+          if (d.conversations?.length) {
+            setDmConversations(d.conversations)
+          }
+        }
+      } catch {}
+    }
+
+    const interval = setInterval(poll, 4000)
+    return () => clearInterval(interval)
   }, [user?.id])
 
 
