@@ -690,7 +690,8 @@ export default function HomePage() {
               setSelectedDM({ user: dmData, lastMessage: '', lastMessageAt: new Date().toISOString(), unreadCount: 0 })
               setSelectedChat(null); setDmMessages([])
             }
-            if (isMobile) setMobileView('chat')
+            // ✅ Read window.innerWidth directly — isMobile state is stale at mount time
+            if (window.innerWidth < 768) setMobileView('chat')
             window.history.replaceState({}, '', '/home')
           }
         } catch {}
