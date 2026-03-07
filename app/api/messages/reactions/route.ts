@@ -1,42 +1,56 @@
 // app/api/messages/reactions/route.ts
-
 import { PrismaClient } from '@prisma/client'
+import { publishEvent } from '@/lib/ably-server'
 
 const prisma = new PrismaClient()
 
-// POST - toggle a reaction (add if not exists, remove if exists)
 export async function POST(request: Request) {
   try {
     const { messageId, userId, emoji } = await request.json()
-
     if (!messageId || !userId || !emoji) {
-      return Response.json(
-        { error: 'messageId, userId, and emoji are required' },
-        { status: 400 }
-      )
+      return Response.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Check if reaction already exists
+    // Find the message to get the groupId for Ably broadcast
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { groupId: true },
+    })
+
+    if (!message) {
+      return Response.json({ error: 'Message not found' }, { status: 404 })
+    }
+
+    // Toggle: remove if already reacted with this emoji, add if not
     const existing = await prisma.messageReaction.findFirst({
       where: { messageId, userId, emoji },
     })
 
     if (existing) {
-      // Remove reaction (toggle off)
       await prisma.messageReaction.delete({ where: { id: existing.id } })
-      return Response.json({ success: true, action: 'removed', emoji })
     } else {
-      // Add reaction (toggle on)
       await prisma.messageReaction.create({
         data: { messageId, userId, emoji },
       })
-      return Response.json({ success: true, action: 'added', emoji })
     }
+
+    // Fetch full updated reactions for this message
+    const updatedReactions = await prisma.messageReaction.findMany({
+      where: { messageId },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    })
+
+    // Broadcast to group channel so ALL members see reaction update instantly
+    await publishEvent(`group-${message.groupId}`, 'reaction-updated', {
+      messageId,
+      reactions: updatedReactions,
+    })
+
+    return Response.json({ reactions: updatedReactions })
   } catch (error) {
-    console.error('❌ Reaction error:', error)
-    return Response.json(
-      { error: 'Failed to toggle reaction', details: String(error) },
-      { status: 500 }
-    )
+    console.error('Message reaction error:', error)
+    return Response.json({ error: 'Failed to toggle reaction' }, { status: 500 })
   }
 }

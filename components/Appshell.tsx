@@ -236,8 +236,9 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
         {/* ════════════════════════════════════════
             MOBILE BOTTOM NAV — visible only on mobile (lg:hidden)
             ════════════════════════════════════════ */}
+        {/* ✅ Hide bottom nav on sub-pages — they have a back button instead */}
         <nav
-          className="lg:hidden flex-shrink-0 bg-white border-t border-gray-200 flex items-stretch"
+          className={`lg:hidden flex-shrink-0 bg-white border-t border-gray-200 flex items-stretch ${showBack ? 'hidden' : ''}`}
           style={{
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             // Safe area handles iPhone home bar
