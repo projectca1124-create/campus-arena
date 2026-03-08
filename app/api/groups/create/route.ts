@@ -1,3 +1,4 @@
+// app/api/groups/route.ts
 import { PrismaClient } from '@prisma/client'
 import crypto from 'crypto'
 
@@ -7,9 +8,76 @@ function generateInviteCode(): string {
   return crypto.randomBytes(4).toString('hex')
 }
 
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get('userId')
+
+    if (!userId) {
+      return Response.json({ error: 'userId is required' }, { status: 400 })
+    }
+
+    const groupMembers = await prisma.groupMember.findMany({
+      where: { userId },
+      include: {
+        group: {
+          include: {
+            members: {
+              include: {
+                user: {
+                  select: {
+                    id: true, email: true, firstName: true, lastName: true,
+                    university: true, major: true, degree: true,
+                    semester: true, year: true, profileImage: true,
+                    onboardingComplete: true,
+                  },
+                },
+              },
+            },
+            messages: {
+              include: {
+                user: {
+                  select: { id: true, firstName: true, lastName: true, profileImage: true },
+                },
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 50,
+            },
+          },
+        },
+      },
+    })
+
+    const groups = groupMembers.map((gm) => ({
+      id: gm.group.id,
+      name: gm.group.name,
+      description: gm.group.description,
+      icon: gm.group.icon,
+      type: gm.group.type,
+      isDefault: gm.group.isDefault,
+      visibility: gm.group.visibility,
+      inviteCode: gm.group.inviteCode,
+      university: gm.group.university,
+      degree: gm.group.degree,
+      major: gm.group.major,
+      // ✅ Filter out ghost accounts (signed up but never completed onboarding)
+      members: gm.group.members.filter(m => m.user.onboardingComplete && m.user.firstName),
+      messages: gm.group.messages,
+    }))
+
+    return Response.json({ success: true, groups })
+  } catch (error) {
+    console.error('❌ Get groups error:', error)
+    return Response.json({ error: 'Failed to fetch groups', details: String(error) }, { status: 500 })
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    // ✅ FIX: Added `icon` — was missing so group picture was silently dropped on creation
+    // ✅ FIX: Extract `icon` from the request body.
+    // Previously `icon` was ignored here, so group pictures uploaded during
+    // creation were silently dropped. The avatar PATCH endpoint worked fine
+    // because it explicitly handled `icon` — the create endpoint just never did.
     const { name, description, userId, visibility, icon } = await request.json()
 
     if (!name || !userId) {
@@ -39,7 +107,7 @@ export async function POST(request: Request) {
       data: {
         name: name.trim(),
         description: description?.trim() || null,
-        // ✅ FIX: Save icon if provided during creation
+        // ✅ FIX: Save the icon if one was provided during creation
         icon: icon || null,
         type: 'custom',
         isDefault: false,
@@ -58,15 +126,9 @@ export async function POST(request: Request) {
           include: {
             user: {
               select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-                university: true,
-                profileImage: true,
-                major: true,
-                semester: true,
-                year: true,
+                id: true, email: true, firstName: true, lastName: true,
+                university: true, profileImage: true, major: true,
+                semester: true, year: true,
               },
             },
           },

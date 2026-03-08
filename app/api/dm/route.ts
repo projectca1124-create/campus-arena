@@ -71,8 +71,8 @@ export async function GET(request: Request) {
       where: { OR: [{ senderId: userId }, { receiverId: userId }] },
       select: {
         id: true, content: true, senderId: true, receiverId: true, read: true, createdAt: true,
-        sender: { select: { id: true, firstName: true, lastName: true, profileImage: true, major: true, year: true } },
-        receiver: { select: { id: true, firstName: true, lastName: true, profileImage: true, major: true, year: true } },
+        sender: { select: { id: true, firstName: true, lastName: true, profileImage: true, major: true, year: true, onboardingComplete: true } },
+        receiver: { select: { id: true, firstName: true, lastName: true, profileImage: true, major: true, year: true, onboardingComplete: true } },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -94,6 +94,7 @@ export async function GET(request: Request) {
     }
 
     const conversations = Array.from(conversationMap.values())
+      .filter(c => c.user.onboardingComplete !== false && c.user.firstName)  // ✅ hide ghost accounts
       .sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime())
 
     return Response.json({ conversations })
@@ -131,26 +132,37 @@ export async function POST(request: Request) {
       select: DM_SELECT,
     })
 
-    // Publish to DM channel (both users see it)
+    // ── Publish real-time events ─────────────────────────────────────────────
     const channel = getDMChannel(senderId, receiverId)
-    await publishEvent(channel, 'new-message', { message })
-
-    // Notify receiver — DB notification (shows in bell) + real-time Ably ping
     const senderName = `${message.sender.firstName} ${message.sender.lastName}`
     const dmPreview = content?.substring(0, 50) || '📎 Attachment'
-    // Persist to DB so bell shows it (was missing — fixing DM notification bug)
+
+    // Publish both events in parallel — don't let one failure block the other
+    const [dmPublish, notifPublish] = await Promise.allSettled([
+      // 1. DM channel — receiver's open chat sees message immediately
+      publishEvent(channel, 'new-message', { message }),
+      // 2. User channel — receiver's sidebar + notification bell updates
+      publishEvent(`user-${receiverId}`, 'new-dm-notification', {
+        from: {
+          id: message.sender.id,
+          firstName: message.sender.firstName,
+          lastName: message.sender.lastName,
+          profileImage: message.sender.profileImage,
+        },
+        preview: dmPreview,
+        timestamp: message.createdAt,
+      }),
+    ])
+
+    if (dmPublish.status === 'rejected') {
+      console.error('[DM route] DM channel publish failed:', dmPublish.reason)
+    }
+    if (notifPublish.status === 'rejected') {
+      console.error('[DM route] User notification publish failed:', notifPublish.reason)
+    }
+
+    // DB notification + web push (fire and forget — don't block response)
     notifyDM(receiverId, senderName, dmPreview, senderId).catch(() => {})
-    // Real-time ping for instant badge
-    await publishEvent(`user-${receiverId}`, 'new-dm-notification', {
-      from: {
-        id: message.sender.id,
-        firstName: message.sender.firstName,
-        lastName: message.sender.lastName,
-        profileImage: message.sender.profileImage,
-      },
-      preview: dmPreview,
-      timestamp: message.createdAt,
-    })
 
     return Response.json({ message })
   } catch (error) {

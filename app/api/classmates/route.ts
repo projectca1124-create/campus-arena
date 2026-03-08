@@ -1,5 +1,4 @@
 // app/api/classmates/route.ts
-
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
@@ -28,8 +27,11 @@ export async function GET(request: Request) {
 
     // Build filter
     const where: any = {
-      id: { not: userId }, // exclude self
+      id: { not: userId },
       university: currentUser.university,
+      onboardingComplete: true,        // ✅ exclude ghost accounts
+      firstName: { not: null },        // ✅ exclude NULL names
+      lastName: { not: null },         // ✅ exclude NULL names
     }
 
     if (search) {
@@ -65,11 +67,14 @@ export async function GET(request: Request) {
       orderBy: { firstName: 'asc' },
     })
 
-    // Get distinct majors and years for filter dropdowns
+    // Get distinct majors and years for filter dropdowns — same onboarding filter applied
     const allStudents = await prisma.user.findMany({
       where: {
         university: currentUser.university,
         id: { not: userId },
+        onboardingComplete: true,      // ✅ filter dropdowns also exclude ghost accounts
+        firstName: { not: null },
+        lastName: { not: null },
       },
       select: { major: true, year: true },
     })

@@ -26,7 +26,10 @@ export async function GET(request: Request) {
       return Response.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const where: any = { university: user.university }
+    const where: any = {
+      university: user.university,
+      user: { onboardingComplete: true },  // ✅ hide talks from ghost/incomplete accounts
+    }
 
     if (search) {
       where.OR = [
@@ -103,11 +106,16 @@ export async function POST(request: Request) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { university: true, firstName: true, lastName: true },
+      select: { university: true, firstName: true, lastName: true, onboardingComplete: true },
     })
 
     if (!user) {
       return Response.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // ✅ Block ghost accounts (signed up but never completed onboarding)
+    if (!user.onboardingComplete) {
+      return Response.json({ error: 'Complete your profile before posting' }, { status: 403 })
     }
 
     const talk = await prisma.campusTalk.create({
