@@ -54,13 +54,30 @@ export async function notifyDM(
   preview: string,
   senderId: string,
 ) {
-  await createNotification({
-    userId: receiverId,
-    type: 'dm',
-    title: `\u{1F4AC} ${senderName}`,
+  const link = `/home?openDM=${senderId}&dmName=${encodeURIComponent(senderName)}&tab=dms`
+
+  // ── NO DB record for DMs — bell icon stays clean ──────────────────
+  // Still fire Ably ping (sidebar unread badge) + Web Push (OS notification)
+  try {
+    await publishEvent(`user-${receiverId}`, 'new-notification', {
+      id: `dm-${senderId}-${Date.now()}`,   // ephemeral id, not persisted
+      type: 'dm',
+      title: `💬 ${senderName}`,
+      body: preview,
+      link,
+      read: false,
+      createdAt: new Date().toISOString(),
+    })
+  } catch (err) {
+    console.error('notifyDM ably error:', err)
+  }
+
+  sendPushToUser(receiverId, {
+    title: `💬 ${senderName}`,
     body: preview,
-    link: `/home?openDM=${senderId}&dmName=${encodeURIComponent(senderName)}&tab=dms`,
-  })
+    url: link,
+    tag: 'dm',
+  }).catch(() => {})
 }
 
 export async function notifyGroupMessage(
@@ -75,7 +92,7 @@ export async function notifyGroupMessage(
       createNotification({
         userId: uid,
         type: 'message',
-        title: `\u{1F465} ${groupName}`,
+        title: `👥 ${groupName}`,
         body: `${senderName}: ${preview}`,
         link: `/home?groupId=${groupId}`,
       })
@@ -97,8 +114,8 @@ export async function notifyTalkResponse(
     await createNotification({
       userId: talk.userId,
       type: 'campus_talk',
-      title: `\u{1F393} New Response`,
-      body: `${responderName} responded to: "${talk.title.substring(0, 55)}${talk.title.length > 55 ? '\u2026' : ''}"`,
+      title: `🎓 New Response`,
+      body: `${responderName} responded to: "${talk.title.substring(0, 55)}${talk.title.length > 55 ? '…' : ''}"`,
       link: `/home/campus-talks?thread=${talkId}`,
     })
   } catch (err) {

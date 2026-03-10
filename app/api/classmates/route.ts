@@ -29,9 +29,9 @@ export async function GET(request: Request) {
     const where: any = {
       id: { not: userId },
       university: currentUser.university,
-      onboardingComplete: true,        // ✅ exclude ghost accounts
-      firstName: { not: null },        // ✅ exclude NULL names
-      lastName: { not: null },         // ✅ exclude NULL names
+      onboardingComplete: true,
+      firstName: { not: null },
+      lastName: { not: null },
     }
 
     if (search) {
@@ -61,18 +61,20 @@ export async function GET(request: Request) {
         semester: true,
         year: true,
         funFact: true,
+        interests: true,
         profileImage: true,
         university: true,
+        academicStanding: true, // ✅ added
       },
       orderBy: { firstName: 'asc' },
     })
 
-    // Get distinct majors and years for filter dropdowns — same onboarding filter applied
+    // Get distinct majors and years for filter dropdowns
     const allStudents = await prisma.user.findMany({
       where: {
         university: currentUser.university,
         id: { not: userId },
-        onboardingComplete: true,      // ✅ filter dropdowns also exclude ghost accounts
+        onboardingComplete: true,
         firstName: { not: null },
         lastName: { not: null },
       },

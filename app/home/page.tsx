@@ -17,7 +17,7 @@ import {
   BellOff, BellRing, VolumeX, Reply, Sticker, ChevronDown,
   Forward, Pencil, Trash2, Copy, Check, CheckCheck,
   Pin, PinOff, Link2, Share2, Lock, Globe, Shield, UserPlus,
-  Menu, ChevronLeft, Camera, CheckCircle2,
+  Menu, ChevronLeft, Camera, Gamepad2, User,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -268,8 +268,6 @@ export default function HomePage() {
 
   const [pinnedGroupId, setPinnedGroupId] = useState<string | null>(null)
   const [shareGroupViaDM, setShareGroupViaDM] = useState<Group | null>(null)
-  const [shareDMSentTo, setShareDMSentTo] = useState<Set<string>>(new Set())
-  const [shareDMSending, setShareDMSending] = useState<string | null>(null)
   const [copiedInviteLink, setCopiedInviteLink] = useState(false)
   const [copiedInviteCode, setCopiedInviteCode] = useState(false)
   const [showJoinModal, setShowJoinModal] = useState(false)
@@ -410,31 +408,12 @@ export default function HomePage() {
       }
     } catch { setPinnedGroupId(prev) }
   }
-  const handleShareGroupViaDM = async (conv: DMConversation, group: Group) => {
-    if (!user || shareDMSending) return
-    if (shareDMSentTo.has(conv.user.id)) return
-    setShareDMSending(conv.user.id)
+  const handleShareGroupViaDM = (conv: DMConversation, group: Group) => {
+    if (!user) return
     const link = getInviteLink(group)
-    try {
-      const res = await fetch('/api/dm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`,
-          // ✅ FIX 1: senderId was missing — API requires it, causing silent failure
-          senderId: user.id,
-          receiverId: conv.user.id,
-        }),
-      })
-      if (res.ok) {
-        // ✅ FIX 2: Track sent state per contact so user sees checkmark feedback
-        setShareDMSentTo(prev => new Set(prev).add(conv.user.id))
-      }
-    } catch (err) {
-      console.error('Share group via DM error:', err)
-    } finally {
-      setShareDMSending(null)
-    }
+    fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: `Hey! Join my group "${group.name}" on Campus Arena: ${link}`, receiverId: conv.user.id }) })
+    setShareGroupViaDM(null)
   }
   const handleDeleteGroup = async () => {
     if (!selectedChat || !user) return
@@ -690,8 +669,7 @@ export default function HomePage() {
               setSelectedDM({ user: dmData, lastMessage: '', lastMessageAt: new Date().toISOString(), unreadCount: 0 })
               setSelectedChat(null); setDmMessages([])
             }
-            // ✅ Read window.innerWidth directly — isMobile state is stale at mount time
-            if (window.innerWidth < 768) setMobileView('chat')
+            if (isMobile) setMobileView('chat')
             window.history.replaceState({}, '', '/home')
           }
         } catch {}
@@ -948,12 +926,6 @@ export default function HomePage() {
         setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, content: data.content } : m))
       })
 
-      // ✅ Sync group reactions in real-time for ALL members (not just the reactor)
-      ch.subscribe('reaction-updated', (msg: Ably.Message) => {
-        const data = msg.data as { messageId: string; reactions: Reaction[] }
-        setMessages(prev => prev.map(m => m.id === data.messageId ? { ...m, reactions: data.reactions } : m))
-      })
-
       ch.subscribe('typing', (msg: Ably.Message) => {
         const data = msg.data as { userId: string; userName: string; isTyping: boolean }
         if (data.userId === user.id) return
@@ -991,15 +963,16 @@ export default function HomePage() {
       })
     }
 
-    // ✅ Declared outside if(selectedDM) so cleanup return() can reference it
-    let activeDMMessageHandler: ((msg: Ably.Message) => void) | null = null
-
     if (selectedDM) {
       const ch = ably.channels.get(getDMChannelName(user.id, selectedDM.user.id))
       channels.push(ch)
 
-      // Named handler — only this one gets removed on cleanup, not the global subscribeDM handler
-      activeDMMessageHandler = (msg: Ably.Message) => {
+      // ✅ Fresh new-message subscription scoped to this active chat.
+      // The persistent effect's subscribeDMChannel closure captures otherUserId at subscription
+      // time — before this chat was opened. That stale closure can miss React state updates.
+      // Re-subscribing here with a fresh closure guarantees messages appear instantly.
+      // Deduplication by m.id prevents double-rendering with the persistent effect.
+      ch.subscribe('new-message', (msg: Ably.Message) => {
         const data = msg.data as { message: DMMessage }
         const m = data.message
         setDmMessages(prev => {
@@ -1015,8 +988,7 @@ export default function HomePage() {
             ? { ...c, lastMessage: m.content || '📎 Attachment', lastMessageAt: m.createdAt, unreadCount: 0 }
             : c
         ))
-      }
-      ch.subscribe('new-message', activeDMMessageHandler!)
+      })
 
       ch.subscribe('message-deleted', (msg: Ably.Message) => {
         const data = msg.data as { messageId: string }
@@ -1069,14 +1041,12 @@ export default function HomePage() {
       channels.forEach(ch => {
         try {
           // Only fully detach group channels — DM channels must stay attached
-          // because the persistent subscribeDM handler uses the same channel object.
-          // ✅ FIX: Use ch.unsubscribe(activeDMMessageHandler) — NOT ch.unsubscribe()
-          // ch.unsubscribe() with no args kills ALL listeners including the global one,
-          // which caused messages to stop appearing in the chat window after switching tabs.
+          // because the persistent effect's always-on subscription uses the same channel.
+          // Detaching a DM channel would kill real-time messages when both users are chatting.
           if (ch.name.startsWith('group-')) {
             ch.detach()
-          } else if (activeDMMessageHandler) {
-            ch.unsubscribe(activeDMMessageHandler)
+          } else {
+            ch.unsubscribe()
           }
         } catch {}
       })
@@ -1294,21 +1264,11 @@ export default function HomePage() {
     return () => clearInterval(interval)
   }, [])
 
-  // AbortController ref — cancels in-flight fetch if user switches chat before it resolves
-  const loadMsgAbortRef = useRef<AbortController | null>(null)
   const loadMessages = async (groupId: string) => {
-    loadMsgAbortRef.current?.abort()
-    const ctrl = new AbortController()
-    loadMsgAbortRef.current = ctrl
     setIsLoadingMessages(true)
-    try {
-      const res = await fetch(`/api/messages?groupId=${groupId}`, { signal: ctrl.signal })
-      if (res.ok) { const d = await res.json(); setMessages(d.messages || []) }
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') console.error('loadMessages error:', err)
-    } finally {
-      setIsLoadingMessages(false)
-    }
+    try { const res = await fetch(`/api/messages?groupId=${groupId}`); if (res.ok) { const d = await res.json(); setMessages(d.messages || []) } }
+    catch (err) { console.error('Error:', err) }
+    finally { setIsLoadingMessages(false) }
   }
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1440,19 +1400,7 @@ export default function HomePage() {
 
   const handleReaction = async (messageId: string, emoji: string) => {
     if (!user) return; setShowEmojiPicker(null)
-    try {
-      const res = await fetch('/api/messages/reactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId, userId: user.id, emoji }) })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.reactions) {
-          // API returns full updated reactions array — update state directly, no reload needed
-          setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions: data.reactions } : m))
-        } else if (selectedChat) {
-          // Fallback: API returns older format without reactions array — reload messages
-          loadMessages(selectedChat.id)
-        }
-      }
-    } catch {}
+    try { const res = await fetch('/api/messages/reactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messageId, userId: user.id, emoji }) }); if (res.ok && selectedChat) loadMessages(selectedChat.id) } catch {}
   }
   const handleDMReaction = async (messageId: string, emoji: string) => {
     if (!user || !selectedDM) return; setShowEmojiPicker(null)
@@ -1470,21 +1418,11 @@ export default function HomePage() {
       }
     } catch {}
   }
-  const loadDMAbortRef = useRef<AbortController | null>(null)
   const loadDMMessages = async (otherUserId: string) => {
-    if (!user) return
-    loadDMAbortRef.current?.abort()
-    const ctrl = new AbortController()
-    loadDMAbortRef.current = ctrl
-    setIsLoadingMessages(true)
-    try {
-      const res = await fetch(`/api/dm?otherUserId=${otherUserId}&userId=${user.id}`, { signal: ctrl.signal })
-      if (res.ok) { const d = await res.json(); setDmMessages(d.messages || []) }
-    } catch (err: any) {
-      if (err?.name !== 'AbortError') console.error('loadDMMessages error:', err)
-    } finally {
-      setIsLoadingMessages(false)
-    }
+    if (!user) return; setIsLoadingMessages(true)
+    try { const res = await fetch(`/api/dm?otherUserId=${otherUserId}&userId=${user.id}`); if (res.ok) { const d = await res.json(); setDmMessages(d.messages || []) } }
+    catch (err) { console.error('Error:', err) }
+    finally { setIsLoadingMessages(false) }
   }
   const handleSelectDM = (conv: DMConversation) => {
     isInitialLoadRef.current = true   // reset so next load scrolls instantly
@@ -1570,34 +1508,12 @@ export default function HomePage() {
   const handleSaveEdit = async () => {
     if (!editingMessage || !editingMessage.content.trim()) return
     const isGroupMsg = messages.some(m => m.id === editingMessage.id)
-    const snapshot = editingMessage // capture before async
-    try {
-      const res = await fetch(`/api/messages/${snapshot.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: snapshot.content, userId: user?.id }) })
-      if (res.ok) {
-        if (isGroupMsg) setMessages(prev => prev.map(m => m.id === snapshot.id ? { ...m, content: snapshot.content } : m))
-        else setDmMessages(prev => prev.map(m => m.id === snapshot.id ? { ...m, content: snapshot.content } : m))
-        setEditingMessage(null) // only clear on success
-      }
-      // on failure: keep edit textarea open so user can retry
-    } catch {
-      // network error — keep edit open
-    }
+    try { const res = await fetch(`/api/messages/${editingMessage.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: editingMessage.content, userId: user?.id }) }); if (res.ok) { if (isGroupMsg) setMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, content: editingMessage.content } : m)); else setDmMessages(prev => prev.map(m => m.id === editingMessage.id ? { ...m, content: editingMessage.content } : m)) } } catch {}
+    setEditingMessage(null)
   }
   const handleForwardMessage = (msg: Message | DMMessage) => { setForwardingMessage({ content: msg.content, imageUrl: msg.imageUrl }); setMessageActionId(null) }
-  const forwardToChat = async (group: Group) => {
-    if (!forwardingMessage || !user) return
-    setForwardingMessage(null)
-    const body: any = { content: forwardingMessage.content || '', groupId: group.id, userId: user.id }
-    if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl
-    try { await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) } catch {}
-  }
-  const forwardToDM = async (conv: DMConversation) => {
-    if (!forwardingMessage || !user) return
-    setForwardingMessage(null)
-    const body: any = { content: forwardingMessage.content || '', receiverId: conv.user.id, senderId: user.id }
-    if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl
-    try { await fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) } catch {}
-  }
+  const forwardToChat = (group: Group) => { if (!forwardingMessage || !user) return; const body: any = { content: forwardingMessage.content || '', groupId: group.id, userId: user.id }; if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl; fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); setForwardingMessage(null) }
+  const forwardToDM = (conv: DMConversation) => { if (!forwardingMessage || !user) return; const body: any = { content: forwardingMessage.content || '', receiverId: conv.user.id }; if (forwardingMessage.imageUrl) body.imageUrl = forwardingMessage.imageUrl; fetch('/api/dm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); setForwardingMessage(null) }
   const shouldShowDateSeparator = (msgs: { createdAt: string }[], idx: number) => { if (idx === 0) return true; return new Date(msgs[idx - 1].createdAt).toDateString() !== new Date(msgs[idx].createdAt).toDateString() }
 
   if (isLoading) return (
@@ -1785,7 +1701,7 @@ export default function HomePage() {
         {showDate && (<div className="flex items-center justify-center my-4"><span className="text-[11px] font-semibold text-indigo-400/70 uppercase tracking-wider px-4 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.6)' }}>{formatDateSeparator(msg.createdAt)}</span></div>)}
         <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} ${isTemp ? 'opacity-60' : ''} ${isCons ? 'mt-0.5' : 'mt-3'}`}>
           {!isOwn && !isCons && <p className="text-[11px] font-bold text-gray-500 mb-1 ml-12">{sName}</p>}
-          <div className={`flex gap-2 ${isMobile ? 'max-w-[82%]' : 'max-w-[65%]'} ${isOwn ? 'flex-row-reverse' : ''} group/msg`}>
+          <div className={`flex gap-2 max-w-[65%] ${isOwn ? 'flex-row-reverse' : ''} group/msg`}>
             {!isOwn && !isCons && <UserAvatar src={sAvatar.profileImage} firstName={sAvatar.firstName} lastName={sAvatar.lastName} size={32} className="mt-1" onClick={() => setProfileViewUserId(sId)} />}
             {!isOwn && isCons && <div className="w-8 flex-shrink-0"></div>}
             <div className="relative">
@@ -1816,46 +1732,19 @@ export default function HomePage() {
                 </div>
               )}
               {!isTemp && (
-                <div className={`absolute top-0 ${isOwn ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} transition-all px-1 flex gap-0.5 ${isMobile ? 'opacity-100' : 'opacity-0 group-hover/msg:opacity-100'}`}>
-                  <button onClick={() => handleReply(msg)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 active:bg-indigo-50 transition-all" title="Reply"><Reply className="w-3.5 h-3.5" /></button>
-                  <button onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(showEmojiPicker === msg.id ? null : msg.id) }} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 active:bg-indigo-50 transition-all" title="React"><Smile className="w-3.5 h-3.5" /></button>
-                  <button onClick={(e) => { e.stopPropagation(); setMessageActionId(messageActionId === msg.id ? null : msg.id) }} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 active:bg-indigo-50 transition-all" title="More"><MoreVertical className="w-3.5 h-3.5" /></button>
+                <div className={`absolute top-0 ${isOwn ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} opacity-0 group-hover/msg:opacity-100 transition-all px-1 flex gap-0.5`}>
+                  <button onClick={() => handleReply(msg)} className="p-1 rounded-lg text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 transition-all" title="Reply"><Reply className="w-3.5 h-3.5" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setShowEmojiPicker(showEmojiPicker === msg.id ? null : msg.id) }} className="p-1 rounded-lg text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 transition-all" title="React"><Smile className="w-3.5 h-3.5" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setMessageActionId(messageActionId === msg.id ? null : msg.id) }} className="p-1 rounded-lg text-gray-500 hover:text-indigo-500 hover:bg-indigo-50 transition-all" title="More"><MoreVertical className="w-3.5 h-3.5" /></button>
                 </div>
               )}
               {showEmojiPicker === msg.id && (
-                <div
-                  className="rounded-xl p-1.5 flex gap-0.5"
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    marginTop: 4,
-                    ...(isOwn ? { right: 0 } : { left: 0 }),
-                    zIndex: 50,
-                    background: 'white',
-                    border: '1px solid #e5e7eb',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
+                <div className={`absolute top-8 z-10 ${isOwn ? 'right-0' : 'left-0'} rounded-xl shadow-lg p-1.5 flex gap-0.5`} style={{ background: 'white', border: '1px solid #e5e7eb', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
                   {EMOJI_OPTIONS.map(em => (<button key={em} onClick={() => isDM ? handleDMReaction(msg.id, em) : handleReaction(msg.id, em)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-lg transition-all">{em}</button>))}
                 </div>
               )}
               {messageActionId === msg.id && (
-                <div
-                  className="rounded-xl py-1.5 w-44"
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    // Own messages: open left; others: open right — prevents off-screen clipping
-                    ...(isOwn ? { right: 0 } : { left: 0 }),
-                    marginTop: 4,
-                    zIndex: 50,
-                    background: 'white',
-                    border: '1px solid #e5e7eb',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
-                  }}
-                  onClick={e => e.stopPropagation()}
-                >
+                <div className={`absolute top-8 z-20 ${isOwn ? 'right-0' : 'left-0'} rounded-xl py-1.5 w-44`} style={{ background: 'white', border: '1px solid #e5e7eb', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }} onClick={e => e.stopPropagation()}>
                   {msg.content && <button onClick={() => handleCopyMessage(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors">{copiedMsgId === msg.id ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-gray-400" />}<span>{copiedMsgId === msg.id ? 'Copied!' : 'Copy'}</span></button>}
                   <button onClick={() => handleForwardMessage(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"><Forward className="w-4 h-4 text-gray-400" /><span>Forward</span></button>
                   {isOwn && <button onClick={() => handleStartEdit(msg)} className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"><Pencil className="w-4 h-4 text-gray-400" /><span>Edit</span></button>}
@@ -1887,8 +1776,8 @@ export default function HomePage() {
 
   return (
     <div
-      className="flex bg-gray-50"
-      style={{ position: "relative", overflow: "hidden", height: '100dvh', minHeight: '-webkit-fill-available' }}
+      className="flex h-screen bg-gray-50"
+      style={{ position: "relative", overflow: isMobile ? "hidden" : "hidden" }}
       onClick={() => { initSounds(); setShowEmojiPicker(null); setShowInputEmoji(false); setSidebarMenuId(null); setMessageActionId(null) }}>
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" />
       <input ref={imageInputRef} type="file" className="hidden" onChange={handleImageSelect} accept="image/*" />
@@ -1925,6 +1814,7 @@ export default function HomePage() {
           <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-1">
             <NavItem icon={<MessageSquare className="w-[18px] h-[18px]" />} label="Chat" active />
             <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks" onClick={() => router.push('/home/campus-talks')} />
+            <NavItem icon={<Gamepad2 className="w-[18px] h-[18px]" />} label="Campus Games" onClick={() => router.push('/home/campus-games')} />
           </nav>
           <div className="px-3 py-4" style={{ borderTop: '1px solid #e5e7eb' }}><button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium"><LogOut className="w-[18px] h-[18px]" /><span>Log out</span></button></div>
         </aside>
@@ -1957,7 +1847,7 @@ export default function HomePage() {
           </div>
         </div>
         <div className="px-5 py-3" style={{ borderBottom: '1px solid #e5e7eb' }}><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" /><input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search conversations..." className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/30 transition-all text-gray-900" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }} /></div></div>
-        <div className="flex-1 overflow-y-auto px-4 py-4" style={{ paddingBottom: isMobile ? '16px' : undefined }}>
+        <div className="flex-1 overflow-y-auto px-4 py-4" style={{ paddingBottom: isMobile ? '72px' : undefined }}>
           {activeTab === 'groups' && (
             <div>
               <div className="flex items-center justify-between mb-3 px-1">
@@ -2090,7 +1980,7 @@ export default function HomePage() {
         style={{
           display: 'flex',
           position: isMobile ? 'absolute' : 'relative',
-          top: 0, left: 0, right: 0, bottom: 0, zIndex: isMobile ? 10 : 'auto',
+          top: 0, left: 0, right: 0, bottom: isMobile ? '60px' : 0, zIndex: isMobile ? 10 : 'auto',
           transform: isMobile && mobileView !== 'chat' ? 'translateX(100%)' : 'translateX(0)',
           transition: isMobile ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : undefined,
           visibility: isMobile && mobileView !== 'chat' ? 'hidden' : 'visible',
@@ -2195,7 +2085,7 @@ export default function HomePage() {
 
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 flex flex-col min-w-0">
-            <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-4 relative" style={{ background: 'linear-gradient(160deg, #f0f0ff 0%, #e8eeff 40%, #f5f0ff 70%, #eef0ff 100%)', paddingBottom: isMobile ? 'env(safe-area-inset-bottom, 8px)' : undefined }}>
+            <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 py-4 relative" style={{ background: 'linear-gradient(160deg, #f0f0ff 0%, #e8eeff 40%, #f5f0ff 70%, #eef0ff 100%)', paddingBottom: isMobile ? '70px' : undefined }}>
               {isGroupMode && selectedChat && (
                 isLoadingMessages ? <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>
                 : messages.length > 0 ? (<div className="space-y-1">{messages.map((m, i) => renderMsgBubble(m, i, messages, false))}<div ref={messagesEndRef} /></div>)
@@ -2207,7 +2097,7 @@ export default function HomePage() {
                 : <EmptyChat title="No messages yet" subtitle={`Send a message to ${selectedDM.user.firstName}!`} />
               )}
               {!isGroupMode && !isDMMode && <EmptyChat title="Select a conversation" subtitle="Choose a group or DM to start chatting" />}
-              {showScrollDown && (<button onClick={() => scrollToBottom()} className="fixed right-5 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-10" style={{ bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : '96px', background: 'white', border: '1px solid #e5e7eb' }}><ChevronDown className="w-5 h-5 text-indigo-500" /></button>)}
+              {showScrollDown && (<button onClick={() => scrollToBottom()} className="fixed right-5 w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110 z-10" style={{ bottom: isMobile ? '80px' : '96px', background: 'white', border: '1px solid #e5e7eb' }}><ChevronDown className="w-5 h-5 text-indigo-500" /></button>)}
             </div>
 
             {(isGroupMode || isDMMode) && (
@@ -2346,8 +2236,8 @@ export default function HomePage() {
               </div>
               <div className="px-5 pt-4 pb-2"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" /><input type="text" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} placeholder="Search members..." className="w-full pl-9 pr-3 py-2 rounded-lg text-xs placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600/30 text-gray-900" style={{ background: '#f9fafb', border: '1px solid #e5e7eb' }} /></div></div>
               <div className="px-5 py-2 flex gap-2">
-                <select value={memberYearFilter} onChange={e => setMemberYearFilter(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg text-xs text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600/30" style={{ background: '#f9fafb', border: '1px solid #e5e7eb', appearance: 'none', color: '#111827', colorScheme: 'light' }}><option value="">All Years</option>{getAvailableYears().map(y => <option key={y} value={y}>{y}</option>)}</select>
-                <select value={memberSemesterFilter} onChange={e => setMemberSemesterFilter(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg text-xs text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600/30" style={{ background: '#f9fafb', border: '1px solid #e5e7eb', appearance: 'none', color: '#111827', colorScheme: 'light' }}><option value="">All Semesters</option>{getAvailableSemesters().map(s => <option key={s} value={s}>{s}</option>)}</select>
+                <select value={memberYearFilter} onChange={e => setMemberYearFilter(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg text-xs text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600/30" style={{ background: '#f9fafb', border: '1px solid #e5e7eb', appearance: 'none' }}><option value="">All Years</option>{getAvailableYears().map(y => <option key={y} value={y}>{y}</option>)}</select>
+                <select value={memberSemesterFilter} onChange={e => setMemberSemesterFilter(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg text-xs text-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-600/30" style={{ background: '#f9fafb', border: '1px solid #e5e7eb', appearance: 'none' }}><option value="">All Semesters</option>{getAvailableSemesters().map(s => <option key={s} value={s}>{s}</option>)}</select>
               </div>
               <div className="px-5 pt-2 pb-1"><p className="text-[11px] font-bold text-gray-600 uppercase tracking-widest">Members ({filteredMembers.length})</p></div>
               <div className="flex-1 overflow-y-auto px-5 pb-4">
@@ -2465,61 +2355,19 @@ export default function HomePage() {
       )}
 
       {shareGroupViaDM && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-          onClick={() => { setShareGroupViaDM(null); setShareDMSentTo(new Set()); setShareDMSending(null) }}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShareGroupViaDM(null)}>
           <div className="rounded-2xl shadow-2xl max-w-md w-full p-6 max-h-[500px] flex flex-col" style={{ background: 'white', border: '1px solid #e5e7eb' }} onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Share &quot;{shareGroupViaDM.name}&quot;</h2>
-              <button onClick={() => { setShareGroupViaDM(null); setShareDMSentTo(new Set()); setShareDMSending(null) }}
-                className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button>
-            </div>
-            {/* Invite link preview */}
-            <div className="mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-indigo-500 flex-shrink-0" />
-              <p className="text-xs text-gray-500 truncate flex-1">{getInviteLink(shareGroupViaDM)}</p>
-              <button onClick={() => copyInviteLink(shareGroupViaDM)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 flex-shrink-0">
-                {copiedInviteLink ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
+            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-bold text-gray-900">Share "{shareGroupViaDM.name}"</h2><button onClick={() => setShareGroupViaDM(null)} className="p-1 hover:bg-gray-50 rounded-lg text-gray-500"><X className="w-5 h-5" /></button></div>
+            <div className="mb-4 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-200 flex items-center gap-2"><Link2 className="w-4 h-4 text-indigo-500 flex-shrink-0" /><p className="text-xs text-gray-500 truncate flex-1">{getInviteLink(shareGroupViaDM)}</p><button onClick={() => copyInviteLink(shareGroupViaDM)} className="text-xs font-bold text-indigo-500 hover:text-indigo-600 flex-shrink-0">{copiedInviteLink ? 'Copied!' : 'Copy'}</button></div>
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Send via DM:</p>
-            {/* Contact list with per-contact sent/sending state */}
             <div className="flex-1 overflow-y-auto space-y-1">
-              {dmConversations.length > 0 ? dmConversations.map(conv => {
-                const isSent = shareDMSentTo.has(conv.user.id)
-                const isSending = shareDMSending === conv.user.id
-                return (
-                  <button key={conv.user.id}
-                    onClick={() => handleShareGroupViaDM(conv, shareGroupViaDM)}
-                    disabled={isSent || !!shareDMSending}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all disabled:cursor-default">
-                    <UserAvatar src={conv.user.profileImage} firstName={conv.user.firstName} lastName={conv.user.lastName} size={36} />
-                    <span className="text-sm font-medium text-gray-900 flex-1 text-left">{conv.user.firstName} {conv.user.lastName}</span>
-                    {/* ✅ FIX 3: Per-contact feedback — spinner while sending, checkmark when sent */}
-                    {isSending ? (
-                      <Loader2 className="w-4 h-4 text-indigo-400 animate-spin flex-shrink-0" />
-                    ) : isSent ? (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-green-600 flex-shrink-0">
-                        <CheckCircle2 className="w-4 h-4" /> Sent
-                      </span>
-                    ) : (
-                      <span className="text-xs font-semibold text-indigo-500 flex-shrink-0">Send</span>
-                    )}
-                  </button>
-                )
-              }) : <p className="text-center text-gray-500 text-sm py-6">No DM conversations yet</p>}
-            </div>
-            {/* ✅ FIX 3: Done button appears once at least one was sent */}
-            {shareDMSentTo.size > 0 && (
-              <div className="pt-4 border-t border-gray-100 mt-2">
-                <button
-                  onClick={() => { setShareGroupViaDM(null); setShareDMSentTo(new Set()); setShareDMSending(null) }}
-                  className="w-full py-2.5 rounded-xl font-semibold text-sm text-indigo-600 hover:bg-indigo-50 transition-all"
-                  style={{ border: '1px solid #e0e7ff' }}>
-                  Done — Shared with {shareDMSentTo.size} {shareDMSentTo.size === 1 ? 'person' : 'people'}
+              {dmConversations.length > 0 ? dmConversations.map(conv => (
+                <button key={conv.user.id} onClick={() => handleShareGroupViaDM(conv, shareGroupViaDM)} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all">
+                  <UserAvatar src={conv.user.profileImage} firstName={conv.user.firstName} lastName={conv.user.lastName} size={36} />
+                  <span className="text-sm font-medium text-gray-900">{conv.user.firstName} {conv.user.lastName}</span>
                 </button>
-              </div>
-            )}
+              )) : <p className="text-center text-gray-500 text-sm py-6">No DM conversations yet</p>}
+            </div>
           </div>
         </div>
       )}
@@ -2688,17 +2536,17 @@ export default function HomePage() {
 
       <ProfileViewModal userId={profileViewUserId} onClose={() => setProfileViewUserId(null)} currentUserId={user?.id} onStartDM={handleStartDM} />
 
-      {/* ── MOBILE BOTTOM TAB BAR — only on list view, never inside open chat ── */}
-      {isMobile && mobileView === 'list' && (
+      {/* ── MOBILE BOTTOM TAB BAR ── */}
+      {isMobile && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center border-t"
           style={{ background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderColor: '#e5e7eb', paddingBottom: 'env(safe-area-inset-bottom, 0px)', height: '60px' }}>
-          {/* Chat tab — always active here since nav only shows on list view */}
+          {/* Chat tab */}
           <button onClick={() => setMobileView('list')} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
-            <div className="p-1.5 rounded-xl transition-all relative bg-indigo-50">
-              <MessageSquare className="w-[22px] h-[22px] text-indigo-600" />
+            <div className={`p-1.5 rounded-xl transition-all relative ${mobileView !== 'chat' ? 'bg-indigo-50' : ''}`}>
+              <MessageSquare className={`w-[22px] h-[22px] ${mobileView !== 'chat' ? 'text-indigo-600' : 'text-gray-400'}`} />
               {(() => { const t = groups.reduce((s,g)=>s+getGroupUnread(g),0)+totalUnread; return t > 0 ? <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-indigo-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{t > 99 ? '99+' : t}</span> : null })()}
             </div>
-            <span className="text-[10px] font-semibold text-indigo-600">Chat</span>
+            <span className={`text-[10px] font-semibold ${mobileView !== 'chat' ? 'text-indigo-600' : 'text-gray-400'}`}>Chat</span>
           </button>
           {/* Campus Talks tab */}
           <button onClick={() => router.push('/home/campus-talks')} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
@@ -2707,8 +2555,8 @@ export default function HomePage() {
             </div>
             <span className="text-[10px] font-semibold text-gray-400">Talks</span>
           </button>
-          {/* ✅ FIX: Profile tab navigates to /home/profile, NOT logout */}
-          <button onClick={() => router.push('/home/profile')} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
+          {/* Profile/Logout tab */}
+          <button onClick={() => setShowLogoutModal(true)} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
             <div className="p-1.5 rounded-xl">
               {user?.profileImage
                 ? <img src={user.profileImage} className="w-[22px] h-[22px] rounded-full object-cover" />
@@ -2716,13 +2564,6 @@ export default function HomePage() {
               }
             </div>
             <span className="text-[10px] font-semibold text-gray-400">Me</span>
-          </button>
-          {/* ✅ FIX: Separate Logout tab restored */}
-          <button onClick={() => setShowLogoutModal(true)} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 transition-all">
-            <div className="p-1.5 rounded-xl">
-              <LogOut className="w-[22px] h-[22px] text-gray-400" />
-            </div>
-            <span className="text-[10px] font-semibold text-gray-400">Logout</span>
           </button>
         </nav>
       )}

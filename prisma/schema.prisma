@@ -47,6 +47,7 @@ model User {
   clubFundTransactions ClubFundTransaction[]
   notifications       Notification[]
   pushSubscriptions   PushSubscription[]
+  gameScores          GameScore[]
 
 
   @@index([email])
@@ -442,3 +443,38 @@ model PushSubscription {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model GameScore {
+  id              String   @id @default(cuid())
+  userId          String
+  game            String   // 'arena-grid'
+  score           Int      // boxes captured
+  won             Boolean
+  gridSize        Int      // 6, 9, or 12
+  mode            String   // 'bot' | 'multiplayer'
+  opponentCount   Int      @default(1)
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, game, createdAt])
+  @@index([game, createdAt])
+}
+
+model GameRoom {
+  id          String   @id @default(cuid())
+  code        String   @unique // 6-char invite code e.g. "XK9F2M"
+  game        String   // 'arena-grid'
+  gridSize    Int      @default(9)
+  hostId      String
+  status      String   @default("waiting") // waiting | playing | finished
+  players     Json     // array of { userId, color, ready }
+  gameState   Json?    // serialized game state
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime? 
+
+  @@index([code])
+  @@index([hostId])
+}
+

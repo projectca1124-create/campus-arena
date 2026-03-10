@@ -12,8 +12,25 @@ interface User {
 interface Classmate {
   id: string; firstName: string; lastName: string; major?: string; semester?: string
   year?: string; funFact?: string; interests?: string; profileImage?: string; university?: string
+  academicStanding?: string
 }
 
+// Simple, clean academic standing label
+function StandingBadge({ standing }: { standing: string }) {
+  const s = standing.toLowerCase()
+  const colorMap: Record<string, string> = {
+    freshman: '#0ea5e9', sophomore: '#10b981', junior: '#8b5cf6',
+    senior: '#f59e0b', alumni: '#ec4899', graduate: '#ef4444',
+  }
+  const key = Object.keys(colorMap).find(k => s.includes(k))
+  const color = key ? colorMap[key] : '#94a3b8'
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : standing
+  return (
+    <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: '0.03em', textTransform: 'uppercase' as const, opacity: 0.85 }}>
+      {label}
+    </span>
+  )
+}
 function UserAvatar({ src, firstName, lastName, size = 60, className = '' }: {
   src?: string | null; firstName?: string; lastName?: string; size?: number; className?: string
 }) {
@@ -77,11 +94,6 @@ export default function ExploreClassmatesPage() {
     router.push('/home?openDM=' + classmate.id + '&tab=dms')
   }
 
-  const getClassLabel = (semester?: string, year?: string) => {
-    if (!semester || !year) return ''
-    return `Class of ${semester} ${year}`
-  }
-
   const getInterests = (classmate: Classmate) => {
     const source = classmate.interests || classmate.funFact || ''
     if (!source) return []
@@ -92,7 +104,6 @@ export default function ExploreClassmatesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* ✅ Responsive padding */}
       <div className="px-4 sm:px-6 py-4 sm:py-6">
 
         {/* Header */}
@@ -101,11 +112,8 @@ export default function ExploreClassmatesPage() {
           <p className="text-gray-500 text-sm mt-1">Find students with shared interests</p>
         </div>
 
-        {/* Search + Filters
-            ✅ Mobile: search full-width on top row, filters side-by-side below
-            ✅ Desktop: all in one row */}
+        {/* Search + Filters */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
-          {/* Search — always full width on mobile */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -113,11 +121,10 @@ export default function ExploreClassmatesPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, major, or interest..."
-              className="w-full pl-10 pr-4 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-gray-900"
+              className="w-full pl-10 pr-4 bg-white border border-gray-200 rounded-lg text-sm placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               style={{ height: 44, fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}
             />
           </div>
-          {/* Filters row — side-by-side on mobile too */}
           <div className="flex gap-2 sm:gap-3">
             <select
               value={majorFilter}
@@ -159,44 +166,47 @@ export default function ExploreClassmatesPage() {
           Showing <span className="font-bold text-gray-900">{classmates.length}</span> students
         </p>
 
-        {/* Cards */}
+        {/* Cards — 4 columns on large screens */}
         {isLoading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-indigo-400 animate-spin" /></div>
         ) : classmates.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {classmates.map((c) => {
               const interests = getInterests(c)
-              const classLabel = getClassLabel(c.semester, c.year)
               return (
-                <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5 hover:shadow-md transition-all flex flex-col">
+                <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-all flex flex-col">
                   <div className="flex items-start gap-3 mb-3">
                     <button onClick={() => setProfileViewUserId(c.id)} className="flex-shrink-0">
-                      <UserAvatar src={c.profileImage} firstName={c.firstName} lastName={c.lastName} size={52}
+                      <UserAvatar src={c.profileImage} firstName={c.firstName} lastName={c.lastName} size={48}
                         className="cursor-pointer hover:ring-2 hover:ring-indigo-300 transition-all" />
                     </button>
                     <div className="flex-1 min-w-0">
-                      <button onClick={() => setProfileViewUserId(c.id)}
-                        className="text-sm sm:text-base font-bold text-gray-900 hover:text-indigo-600 transition-colors text-left leading-tight">
+                      <button
+                        onClick={() => setProfileViewUserId(c.id)}
+                        className="text-sm font-bold text-gray-900 hover:text-indigo-600 transition-colors text-left leading-tight w-full truncate block"
+                      >
                         {c.firstName} {c.lastName}
                       </button>
-                      {c.major && <p className="text-sm text-gray-600 truncate">{c.major}</p>}
-                      {classLabel && <p className="text-xs text-gray-400 mt-0.5">{classLabel}</p>}
+                      <div style={{display:'flex',alignItems:'baseline',gap:5,marginTop:2}}>
+                        {c.major && <span className="text-xs text-gray-500 truncate">{c.major}</span>}
+                        {c.major && c.academicStanding && <span style={{color:'#d1d5db',fontSize:10,lineHeight:1}}>·</span>}
+                        {c.academicStanding && <StandingBadge standing={c.academicStanding} />}
+                      </div>
                     </div>
                   </div>
 
                   {interests.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3 min-h-[28px]">
+                    <div className="flex flex-wrap gap-1 mb-3 min-h-[24px]">
                       {interests.map((tag, i) => (
-                        <span key={i} className="text-xs text-gray-600 bg-gray-100 rounded-full px-2.5 py-1">{tag}</span>
+                        <span key={i} className="text-xs text-gray-600 bg-gray-100 rounded-full px-2 py-0.5">{tag}</span>
                       ))}
                     </div>
                   )}
 
-                  {/* ✅ 44px min-height tap target */}
                   <button
                     onClick={() => handleConnect(c)}
                     className="w-full bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 transition-all mt-auto flex items-center justify-center"
-                    style={{ minHeight: 44 }}
+                    style={{ minHeight: 40 }}
                   >
                     Connect
                   </button>
@@ -212,7 +222,6 @@ export default function ExploreClassmatesPage() {
           </div>
         )}
 
-        {/* Bottom safe area */}
         <div style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
       </div>
 

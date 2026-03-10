@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { MessageSquare, Megaphone, LogOut, Lock, ArrowLeft, User } from 'lucide-react'
+import { MessageSquare, Megaphone, LogOut, Lock, Gamepad2, ArrowLeft } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 import { usePushNotifications } from '@/lib/use-push-notifications'
 
@@ -25,7 +25,6 @@ function ShellAvatar({ src, firstName, lastName, size = 36, className = '' }: {
   )
 }
 
-// ─── Desktop sidebar nav item ────────────────────────────────────
 function NavItem({ icon, label, active, onClick, locked }: {
   icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; locked?: boolean
 }) {
@@ -33,39 +32,29 @@ function NavItem({ icon, label, active, onClick, locked }: {
     <button
       onClick={locked ? undefined : onClick}
       disabled={locked}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${
-        locked ? 'text-gray-300 cursor-not-allowed'
-        : active ? 'bg-indigo-50 text-indigo-600'
-        : 'text-gray-600 hover:bg-gray-50'
-      }`}
-      style={{ minHeight: 44 }}
+      style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '9px 12px',
+        borderRadius: 10,
+        border: 'none',
+        cursor: locked ? 'not-allowed' : 'pointer',
+        background: active ? '#eef2ff' : 'transparent',
+        color: locked ? '#d1d5db' : active ? '#4f46e5' : '#6b7280',
+        fontSize: 13,
+        fontWeight: active ? 600 : 500,
+        textAlign: 'left',
+        transition: 'all 0.15s',
+        minHeight: 40,
+      }}
+      onMouseEnter={e => { if (!locked && !active) { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.color = '#111827' } }}
+      onMouseLeave={e => { if (!locked && !active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6b7280' } }}
     >
-      <span className="flex items-center justify-center w-5 h-5">{icon}</span>
-      <span>{label}</span>
-      {locked && <Lock className="w-3.5 h-3.5 ml-auto text-gray-300" />}
-    </button>
-  )
-}
-
-// ─── Mobile bottom nav item ──────────────────────────────────────
-function BottomNavItem({ icon, label, active, onClick, locked }: {
-  icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; locked?: boolean
-}) {
-  return (
-    <button
-      onClick={locked ? undefined : onClick}
-      disabled={locked}
-      className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-all ${
-        locked ? 'text-gray-300 cursor-not-allowed'
-        : active ? 'text-indigo-600'
-        : 'text-gray-400 active:text-gray-600'
-      }`}
-      style={{ minHeight: 56, WebkitTapHighlightColor: 'transparent' }}
-    >
-      <span className={`flex items-center justify-center transition-transform ${active ? 'scale-110' : ''}`}>
-        {icon}
-      </span>
-      <span className="text-[10px] font-semibold tracking-wide leading-none">{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, flexShrink: 0 }}>{icon}</span>
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      {locked && <Lock style={{ width: 12, height: 12, flexShrink: 0 }} />}
     </button>
   )
 }
@@ -112,69 +101,108 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
     router.push('/auth')
   }
 
-  const isChat = pathname === '/home' || pathname === '/home/'
+  const isChat        = pathname === '/home' || pathname === '/home/'
   const isCampusTalks = pathname?.startsWith('/home/campus-talks')
-  const isProfile = pathname?.startsWith('/home/profile')
-  const isExplore = pathname?.startsWith('/home/explore')
-  const isOnboarding = !user?.onboardingComplete
-  const isOnProfilePage = isProfile
+  const isProfile     = pathname?.startsWith('/home/profile')
+  const isExplore     = pathname?.startsWith('/home/explore')
+  const isGames       = pathname?.startsWith('/home/campus-games')
+  const isOnboarding  = !user?.onboardingComplete
+
+  const showBack = isProfile || isExplore
 
   const autoTitle = isCampusTalks ? 'Campus Talks'
-    : isProfile ? 'Profile'
-    : isExplore ? 'Explore Classmates'
+    : isProfile  ? 'Profile'
+    : isExplore  ? 'Explore Classmates'
+    : isGames    ? 'Campus Games'
     : 'Chat'
   const displayTitle = title ?? autoTitle
 
-  // ── Show back arrow on sub-pages ──
-  const showBack = isCampusTalks || isProfile || isExplore
-
   return (
-    // ✅ h-[100dvh] — uses dynamic viewport height on mobile (excludes browser chrome)
-    // Fallback to h-screen for browsers without dvh support
-    <div className="flex overflow-hidden bg-gray-50" style={{ height: '100dvh', minHeight: '-webkit-fill-available' }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#f9fafb' }}>
 
       {/* ═══════════════════════════════════════
-          DESKTOP SIDEBAR — hidden on mobile
-          ═══════════════════════════════════════ */}
-      <aside className="hidden lg:flex w-[220px] flex-col flex-shrink-0 border-r bg-white border-gray-200">
+          SIDEBAR
+      ═══════════════════════════════════════ */}
+      <aside style={{
+        width: 240,
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'white',
+        borderRight: '1px solid #e5e7eb',
+        height: '100vh',
+      }}>
 
         {/* Logo */}
-        <div className="px-5 py-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-xs">CA</span>
+        <div style={{ padding: '20px 16px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+              background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: 'white', fontWeight: 800, fontSize: 13, letterSpacing: '-0.02em' }}>CA</span>
             </div>
-            <div className="min-w-0">
-              <span className="font-bold text-[15px] text-gray-900 tracking-tight block leading-tight">Campus Arena</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Campus Arena</div>
               {user?.university && (
-                <span className="text-[11px] text-indigo-500 font-semibold truncate block leading-tight mt-0.5">
-                  {user.university.split('.')[0].toUpperCase()}
-                </span>
+                <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 600, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user.university.includes('.') ? user.university.split('.')[0].toUpperCase() : user.university}
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto px-3 pt-2 space-y-1">
-          <NavItem icon={<MessageSquare className="w-[18px] h-[18px]" />} label="Chat"
-            active={isChat && !isOnboarding} onClick={() => router.push('/home')} locked={isOnboarding} />
-          <NavItem icon={<Megaphone className="w-[18px] h-[18px]" />} label="Campus Talks"
-            active={isCampusTalks && !isOnboarding} onClick={() => router.push('/home/campus-talks')} locked={isOnboarding} />
+        {/* Divider */}
+        <div style={{ height: 1, background: '#f3f4f6', margin: '0 16px 12px' }} />
+
+        {/* Nav items */}
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+          <NavItem
+            icon={<MessageSquare style={{ width: 17, height: 17 }} />}
+            label="Chat"
+            active={isChat && !isOnboarding}
+            onClick={() => router.push('/home')}
+            locked={isOnboarding}
+          />
+          <NavItem
+            icon={<Megaphone style={{ width: 17, height: 17 }} />}
+            label="Campus Talks"
+            active={isCampusTalks && !isOnboarding}
+            onClick={() => router.push('/home/campus-talks')}
+            locked={isOnboarding}
+          />
+          <NavItem
+            icon={<Gamepad2 style={{ width: 17, height: 17 }} />}
+            label="Campus Games"
+            active={isGames && !isOnboarding}
+            onClick={() => router.push('/home/campus-games')}
+            locked={isOnboarding}
+          />
         </nav>
 
         {isOnboarding && (
-          <div className="mx-3 mb-3 px-3 py-3 rounded-xl bg-indigo-50 border border-indigo-100">
-            <p className="text-xs text-indigo-600 font-semibold mb-1">Complete your profile</p>
-            <p className="text-[11px] text-indigo-400 leading-relaxed">Fill in your details to unlock Chat and Campus Talks</p>
+          <div style={{ margin: '0 10px 10px', padding: '10px 12px', background: '#eff6ff', borderRadius: 10, border: '1px solid #dbeafe' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#3b82f6', marginBottom: 3 }}>Complete your profile</div>
+            <div style={{ fontSize: 10, color: '#60a5fa', lineHeight: 1.5 }}>Fill in your details to unlock all features</div>
           </div>
         )}
 
-        <div className="px-3 py-4 border-t border-gray-200">
-          <button onClick={() => setShowLogoutModal(true)}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium"
-            style={{ minHeight: 40 }}>
-            <LogOut className="w-[18px] h-[18px]" />
+        {/* Logout only — no user card */}
+        <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 8px' }}>
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 10px', borderRadius: 10, border: 'none',
+              background: 'none', cursor: 'pointer', color: '#9ca3af',
+              fontSize: 13, fontWeight: 500,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af' }}
+          >
+            <LogOut style={{ width: 16, height: 16, flexShrink: 0 }} />
             <span>Log out</span>
           </button>
         </div>
@@ -182,117 +210,75 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
 
       {/* ═══════════════════════════════════════
           MAIN AREA
-          ═══════════════════════════════════════ */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      ═══════════════════════════════════════ */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
-        {/* Top bar */}
         {showTopBar && (
-          <div className="flex-shrink-0 border-b bg-white border-gray-200"
-            style={{
-              height: 56,
-              paddingLeft: 'max(16px, env(safe-area-inset-left))',
-              paddingRight: 'max(16px, env(safe-area-inset-right))',
-            }}>
-            <div className="h-full flex items-center justify-between px-2 sm:px-4">
-              <div className="flex items-center gap-1.5 min-w-0">
-                {showBack && (
-                  <button onClick={() => router.push('/home')}
-                    className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-all flex-shrink-0"
-                    style={{ minWidth: 36, minHeight: 36 }}>
-                    <ArrowLeft className="w-[18px] h-[18px]" />
-                  </button>
-                )}
-                <h1 className="text-[15px] font-semibold text-gray-900 truncate">{displayTitle}</h1>
+          <div style={{
+            flexShrink: 0,
+            height: 54,
+            background: 'white',
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 24px',
+            gap: 12,
+          }}>
+            {showBack && !isGames && (
+              <button
+                onClick={() => router.back()}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, border: '1px solid #e5e7eb', background: 'white', cursor: 'pointer', flexShrink: 0 }}
+              >
+                <ArrowLeft style={{ width: 16, height: 16, color: '#6b7280' }} />
+              </button>
+            )}
+            {!isGames && (
+              <h1 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111827', flex: 1 }}>{displayTitle}</h1>
+            )}
+            {isGames && <div style={{ flex: 1 }} />}
+            {user && !isOnboarding && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                <NotificationBell userId={user.id} />
+                <button
+                  onClick={() => router.push('/home/profile')}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                >
+                  <ShellAvatar src={user.profileImage} firstName={user.firstName} lastName={user.lastName} size={32} className="border-2 border-gray-100 hover:ring-2 hover:ring-indigo-200 transition-all cursor-pointer" />
+                </button>
               </div>
-
-              {user && (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {!isOnboarding && <NotificationBell userId={user.id} />}
-                  <button
-                    onClick={() => router.push('/home/profile')}
-                    disabled={isOnboarding && isOnProfilePage}
-                    style={{ minWidth: 36, minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <ShellAvatar src={user.profileImage} firstName={user.firstName} lastName={user.lastName}
-                      size={32} className="border-2 border-gray-100 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition-all" />
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
 
-        {/* Page content
-            ✅ pb accounts for mobile bottom nav height + safe area */}
-        <div className="flex-1 overflow-y-auto lg:pb-0"
-          style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
-          // ↑ Only applied implicitly — the actual bottom nav sits outside this div
-          // We override with a class approach below
-        >
-          {/* Remove inline paddingBottom — handled via bottom nav spacer */}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
           {children}
         </div>
-
-        {/* ════════════════════════════════════════
-            MOBILE BOTTOM NAV — visible only on mobile (lg:hidden)
-            ════════════════════════════════════════ */}
-        {/* ✅ Hide bottom nav on sub-pages — they have a back button instead */}
-        <nav
-          className={`lg:hidden flex-shrink-0 bg-white border-t border-gray-200 flex items-stretch ${showBack ? 'hidden' : ''}`}
-          style={{
-            paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-            // Safe area handles iPhone home bar
-          }}
-        >
-          <BottomNavItem
-            icon={<MessageSquare className="w-5 h-5" />}
-            label="Chat"
-            active={isChat && !isOnboarding}
-            onClick={() => router.push('/home')}
-            locked={isOnboarding}
-          />
-          <BottomNavItem
-            icon={<Megaphone className="w-5 h-5" />}
-            label="Talks"
-            active={isCampusTalks && !isOnboarding}
-            onClick={() => router.push('/home/campus-talks')}
-            locked={isOnboarding}
-          />
-          <BottomNavItem
-            icon={user?.profileImage
-              ? <img src={user.profileImage} className="w-5 h-5 rounded-full object-cover" alt="" />
-              : <User className="w-5 h-5" />
-            }
-            label="Profile"
-            active={isProfile}
-            onClick={() => router.push('/home/profile')}
-          />
-          <BottomNavItem
-            icon={<LogOut className="w-5 h-5" />}
-            label="Logout"
-            onClick={() => setShowLogoutModal(true)}
-          />
-        </nav>
       </div>
 
-      {/* ═══ LOGOUT MODAL ═══ */}
+      {/* LOGOUT MODAL */}
       {showLogoutModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
-          onClick={() => setShowLogoutModal(false)}>
-          <div className="rounded-2xl shadow-2xl max-w-sm w-full p-6 bg-white border border-gray-200"
-            onClick={e => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Leaving Campus Arena?</h2>
-            <p className="text-sm text-gray-500 mb-6">You&apos;re about to log out. Are you sure?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowLogoutModal(false)}
-                className="flex-1 px-4 border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50"
-                style={{ height: 48 }}>
-                No, Stay
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowLogoutModal(false)}
+        >
+          <div
+            style={{ background: 'white', borderRadius: 20, padding: 28, maxWidth: 360, width: '100%', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#111827' }}>Leaving Campus Arena?</h2>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#6b7280' }}>You're about to log out. Are you sure?</p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                style={{ flex: 1, height: 44, borderRadius: 12, border: '1px solid #e5e7eb', background: 'white', color: '#374151', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Stay
               </button>
-              <button onClick={confirmLogout}
-                className="flex-1 px-4 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700"
-                style={{ height: 48 }}>
-                Yes, Log Out
+              <button
+                onClick={confirmLogout}
+                style={{ flex: 1, height: 44, borderRadius: 12, border: 'none', background: '#4f46e5', color: 'white', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+              >
+                Log Out
               </button>
             </div>
           </div>
