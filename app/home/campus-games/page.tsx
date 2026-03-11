@@ -13,7 +13,7 @@ interface Me { id:string; firstName:string; lastName:string; profileImage?:strin
 interface Classmate { id:string; firstName:string; lastName:string; profileImage?:string|null; major?:string|null; academicStanding?:string|null; year?:string }
 interface LBEntry { userId:string; firstName:string; lastName:string; profileImage?:string|null; major?:string|null; academicStanding?:string|null; weeklyScore:number; gamesPlayed:number }
 interface RoomPlayer { userId:string; firstName:string; lastName:string; profileImage?:string|null; color:string; major?:string|null; ready?:boolean }
-interface ChatMsg { from:string; text:string; color:string; ts:number }
+interface ChatMsg { from:string; text:string; color:string; ts:number; profileImage?:string|null }
 interface FloatReaction { id:number; emoji:string; x:number }
 type GS = { rows:number; cols:number; hLines:number[][]; vLines:number[][]; boxes:number[][]; scores:number[]; turn:number; done:boolean; lastBoxes:number[][]; streaks?:number[]; maxStreak?:number[] }
 
@@ -292,7 +292,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
 
   useEffect(()=>{chatEnd.current?.scrollIntoView({behavior:'smooth'})},[chatMsgs])
 
-  const sz=game.rows,CELL=sz<=6?76:sz<=9?58:42,DOT=sz<=6?9:sz<=9?8:6,LW=sz<=6?6:sz<=9?5:4
+  const sz=game.rows,CELL=sz<=6?76:sz<=9?58:42,DOT=sz<=6?13:sz<=9?11:9,LW=sz<=6?6:sz<=9?5:4
   const total=game.rows*game.cols,filled=game.scores.reduce((a,b)=>a+b,0),pct=filled/total
 
   return(
@@ -385,9 +385,13 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
               {game.boxes.map((row,r)=>row.map((val,c)=>{
                 if(!val)return null
                 const color=bps[val-1]?.color??'#6366f1',pl=bps[val-1]
-                const boxLabel=pl?.label ? pl.label.slice(0,3).toUpperCase() : '?'
+                const avatarSize=Math.max(CELL*.52,18)
+                const ini=(pl?.ini||pl?.label?.slice(0,2)||'?').toUpperCase()
                 return <div key={`b${r}${c}`} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+LW,top:DOT/2+r*(CELL+LW)+LW,width:CELL,height:CELL,borderRadius:6,background:`${color}1e`,display:'flex',alignItems:'center',justifyContent:'center',animation:anim.has(`${r}-${c}`)?'pop .45s cubic-bezier(.34,1.56,.64,1) both':'none'}}>
-                  <span style={{fontSize:CELL*.24,fontWeight:900,color,opacity:.9,lineHeight:1,letterSpacing:'-.02em'}}>{boxLabel}</span>
+                  {pl?.avatar
+                    ?<img src={pl.avatar} alt="" style={{width:avatarSize,height:avatarSize,borderRadius:'50%',objectFit:'cover',opacity:.85,border:`1.5px solid ${color}60`,boxShadow:`0 1px 6px ${color}40`}}/>
+                    :<div style={{width:avatarSize,height:avatarSize,borderRadius:'50%',background:`${color}35`,border:`1.5px solid ${color}60`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:avatarSize*.42,fontWeight:900,color,opacity:.9}}>{ini}</div>
+                  }
                 </div>
               }))}
               {game.hLines.map((row,r)=>row.map((val,c)=>{
@@ -398,7 +402,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
                   <div className="hl" style={{width:'100%',height:LW,borderRadius:LW,background:bg,
                     boxShadow:isBotNew?`0 0 8px 3px ${bps[1]?.color??'#f59e0b'}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
                     transform:h?'scaleY(2.5)':'scaleY(1)',
-                    animation:isBotNew?`botBlink 2.0s ease-in-out 1`:'none',
+                    animation:isBotNew?`botBlink 1.2s ease-in-out 1`:'none',
                     transition:'background .12s, transform .12s',
                   }}/>
                 </div>
@@ -411,7 +415,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
                   <div className="hl" style={{width:LW,height:'100%',borderRadius:LW,background:bg,
                     boxShadow:isBotNew?`0 0 8px 3px ${bps[1]?.color??'#f59e0b'}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
                     transform:h?'scaleX(2.5)':'scaleX(1)',
-                    animation:isBotNew?`botBlink 2.0s ease-in-out 1`:'none',
+                    animation:isBotNew?`botBlink 1.2s ease-in-out 1`:'none',
                     transition:'background .12s, transform .12s',
                   }}/>
                 </div>
@@ -517,63 +521,78 @@ function MatchSummary({game,bps,myIdx,onAgain,onBack,onShare,showConf,rPlayers}:
   const bestStreakIdx=maxStreak.indexOf(Math.max(...maxStreak))
 
   return(
-    <div className="of" style={{height:'100%',overflowY:'auto',background:'#f5f7ff',padding:'24px 20px 36px',animation:'slideUp .4s ease both'}}>
+    <div className="of" style={{height:'100%',overflowY:'auto',background:'#f5f7ff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'32px 20px',animation:'slideUp .4s ease both'}}>
       <G/>
       {showConf&&<Confetti/>}
-      <div style={{textAlign:'center',marginBottom:26}}>
-        <div style={{fontSize:52,marginBottom:10}}>{iWon?'🎉':isDraw?'🤝':'🎮'}</div>
-        <div style={{fontSize:26,fontWeight:900,color:'#0f172a',letterSpacing:'-.04em',marginBottom:6}}>{iWon?'You won!':isDraw?"It's a draw!":`${bps[winnerIdx]?.label} wins!`}</div>
-        <div style={{fontSize:12,color:'#94a3b8'}}>Scores saved to campus leaderboard</div>
-      </div>
-      <div style={{marginBottom:18}}>
-        {[...scores.map((s,i)=>({s,i}))].sort((a,b)=>b.s-a.s).map(({s,i},rank)=>{
-          const M3=['🥇','🥈','🥉'],p=bps[i]
-          return(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:12,background:rank===0?`${p.color}12`:'white',border:`1.5px solid ${rank===0?`${p.color}40`:'#e8eaf6'}`,borderRadius:16,padding:'13px 16px',marginBottom:8,animation:`slideUp .4s ease ${rank*.1}s both`,boxShadow:'0 1px 4px rgba(0,0,0,.04)'}}>
-              <span style={{fontSize:20,width:26,flexShrink:0}}>{M3[rank]??`#${rank+1}`}</span>
-              <Av src={p.avatar} name={p.label} sz={36} color={p.color}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:3,flexWrap:'wrap'}}>
-                  <span style={{fontSize:14,fontWeight:700,color:'#0f172a'}}>{p.label}</span>
-                  {p.major&&<MajorBadge major={p.major} color={p.color}/>}
+      <div style={{width:'100%',maxWidth:440,display:'flex',flexDirection:'column',gap:16}}>
+
+        {/* Hero */}
+        <div style={{textAlign:'center',paddingBottom:4}}>
+          <div style={{fontSize:44,marginBottom:8,lineHeight:1}}>{iWon?'🎉':isDraw?'🤝':'🎮'}</div>
+          <div style={{fontSize:28,fontWeight:900,color:'#0f172a',letterSpacing:'-.04em',marginBottom:4}}>
+            {iWon?'You won!':isDraw?"It's a draw!":`${bps[winnerIdx]?.label} wins!`}
+          </div>
+          <div style={{fontSize:11,color:'#b0b8cc',fontWeight:500}}>Scores saved to campus leaderboard</div>
+        </div>
+
+        {/* Score cards */}
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {[...scores.map((s,i)=>({s,i}))].sort((a,b)=>b.s-a.s).map(({s,i},rank)=>{
+            const M3=['🥇','🥈','🥉'],p=bps[i]
+            const isWinner=rank===0
+            return(
+              <div key={i} style={{
+                display:'flex',alignItems:'center',gap:12,
+                background:isWinner?'white':'#fafbff',
+                border:`1.5px solid ${isWinner?`${p.color}35`:'#eceef8'}`,
+                borderRadius:16,padding:'12px 16px',
+                boxShadow:isWinner?`0 4px 20px ${p.color}18`:'none',
+                animation:`slideUp .35s ease ${rank*.08}s both`
+              }}>
+                <span style={{fontSize:18,width:22,flexShrink:0,textAlign:'center'}}>{M3[rank]??`#${rank+1}`}</span>
+                <Av src={p.avatar} name={p.label} sz={34} color={p.color}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2,flexWrap:'wrap'}}>
+                    <span style={{fontSize:13,fontWeight:700,color:'#0f172a'}}>{p.label}</span>
+                    {p.major&&<MajorBadge major={p.major} color={p.color}/>}
+                  </div>
+                  <div style={{fontSize:10,color:'#94a3b8',fontWeight:600}}>🔥 streak: {maxStreak[i]}</div>
                 </div>
-                <div style={{fontSize:10,color:p.color,fontWeight:700}}>🔥 Best streak: {maxStreak[i]} boxes</div>
+                <div style={{fontSize:28,fontWeight:900,color:isWinner?p.color:'#94a3b8',letterSpacing:'-.04em'}}>{s}</div>
               </div>
-              <div style={{fontSize:26,fontWeight:900,color:p.color,letterSpacing:'-.04em'}}>{s}</div>
-            </div>
-          )
-        })}
-      </div>
-      <div style={{background:'white',borderRadius:16,border:'1px solid #e8eaf6',padding:'14px',marginBottom:18,boxShadow:'0 1px 4px rgba(0,0,0,.04)'}}>
-        <div style={{fontSize:9,fontWeight:800,color:'#94a3b8',letterSpacing:'.1em',marginBottom:12,textTransform:'uppercase'}}>Match Summary</div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+            )
+          })}
+        </div>
+
+        {/* Stats strip */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
           {[
-            {label:'🏆 Winner',val:isDraw?'Draw':bps[winnerIdx]?.label,color:'#0f172a'},
-            {label:'🔥 Longest Streak',val:`${bps[bestStreakIdx]?.label}: ${Math.max(...maxStreak)}`,color:bps[bestStreakIdx]?.color??'#0f172a'},
-            {label:'⚡ Most Strategic',val:bps[bestStreakIdx]?.label??'—',color:bps[bestStreakIdx]?.color??'#0f172a'},
-            {label:'📦 Total Boxes',val:`${game.rows*game.cols}`,color:'#0f172a'},
+            {icon:'🔥',label:'Best Streak',val:`${Math.max(...maxStreak)} boxes`},
+            {icon:'📦',label:'Total Boxes',val:`${game.rows*game.cols}`},
+            {icon:'⚡',label:'Grid Size',val:`${game.rows}×${game.cols}`},
           ].map((x,i)=>(
-            <div key={i} style={{background:'#f8fafc',borderRadius:12,padding:'11px 13px',border:'1px solid #e8eaf6'}}>
-              <div style={{fontSize:10,color:'#94a3b8',marginBottom:4}}>{x.label}</div>
-              <div style={{fontSize:13,fontWeight:700,color:x.color,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{x.val}</div>
+            <div key={i} style={{background:'white',borderRadius:13,padding:'11px 10px',border:'1px solid #eceef8',textAlign:'center'}}>
+              <div style={{fontSize:16,marginBottom:4}}>{x.icon}</div>
+              <div style={{fontSize:11,fontWeight:800,color:'#0f172a',marginBottom:2}}>{x.val}</div>
+              <div style={{fontSize:9,color:'#b0b8cc',fontWeight:600,textTransform:'uppercase',letterSpacing:'.06em'}}>{x.label}</div>
             </div>
           ))}
         </div>
-      </div>
-      <div style={{display:'flex',flexDirection:'column',gap:9}}>
+
+        {/* Actions */}
         <div style={{display:'flex',gap:10}}>
-          <button onClick={onAgain} className="btn-press" style={{flex:1,height:50,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',borderRadius:14,cursor:'pointer',color:'white',fontSize:15,fontWeight:800,fontFamily:"'Outfit',sans-serif",boxShadow:'0 6px 20px rgba(99,102,241,.4)'}}>Play Again</button>
-          <button onClick={onBack} className="btn-press" style={{flex:1,height:50,background:'#f1f5f9',border:'1.5px solid #e2e8f0',borderRadius:14,cursor:'pointer',color:'#374151',fontSize:15,fontWeight:700,fontFamily:"'Outfit',sans-serif"}}>Back</button>
+          <button onClick={onAgain} className="btn-press" style={{flex:2,height:48,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',borderRadius:14,cursor:'pointer',color:'white',fontSize:14,fontWeight:800,fontFamily:"'Outfit',sans-serif",boxShadow:'0 6px 20px rgba(99,102,241,.35)'}}>Play Again</button>
+          <button onClick={onBack} className="btn-press" style={{flex:1,height:48,background:'white',border:'1.5px solid #e2e8f0',borderRadius:14,cursor:'pointer',color:'#64748b',fontSize:14,fontWeight:700,fontFamily:"'Outfit',sans-serif"}}>Back</button>
         </div>
         {onShare&&(
-          <button onClick={onShare} className="btn-press" style={{width:'100%',height:44,background:'#f8fafc',border:'1.5px solid #e2e8f0',borderRadius:13,cursor:'pointer',color:'#64748b',fontSize:13,fontWeight:700,fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-            <Share2 size={14}/> Share Result to Campus Talks
+          <button onClick={onShare} className="btn-press" style={{width:'100%',height:40,background:'white',border:'1.5px solid #e8eaf6',borderRadius:12,cursor:'pointer',color:'#94a3b8',fontSize:12,fontWeight:700,fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
+            <Share2 size={13}/> Share to Campus Talks
           </button>
         )}
         {rPlayers&&rPlayers.length>1&&(
           <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
             {rPlayers.slice(1).map((p,i)=>(
-              <button key={i} className="btn-press" style={{flex:1,minWidth:100,height:38,background:'#f8fafc',border:'1.5px solid #e2e8f0',borderRadius:11,cursor:'pointer',color:'#64748b',fontSize:11,fontWeight:700,fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
+              <button key={i} className="btn-press" style={{flex:1,minWidth:100,height:36,background:'white',border:'1.5px solid #e2e8f0',borderRadius:11,cursor:'pointer',color:'#64748b',fontSize:11,fontWeight:700,fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
                 <UserPlus size={12}/> Add {p.firstName}
               </button>
             ))}
@@ -585,7 +604,6 @@ function MatchSummary({game,bps,myIdx,onAgain,onBack,onShare,showConf,rPlayers}:
 }
 
 // ─── Hub ──────────────────────────────────────────────────────────
-// ✅ CHANGE 1: Leaderboard "This Week" section removed entirely
 function Hub({me,onArena}:{me:Me;onArena:()=>void}){
   return(
     <div className="of" style={{height:'100%',overflowY:'auto',background:'#f5f7ff',position:'relative'}}>
@@ -660,7 +678,6 @@ function ArenaDetail({me,onBack,onBot,onFriends}:{me:Me;onBack:()=>void;onBot:()
           <div style={{position:'absolute',inset:0,backgroundImage:'radial-gradient(circle,rgba(255,255,255,.10) 1.5px,transparent 1.5px)',backgroundSize:'20px 20px',pointerEvents:'none'}}/>
           <div style={{position:'absolute',top:-40,right:-40,width:180,height:180,borderRadius:'50%',background:'rgba(255,255,255,.06)',filter:'blur(30px)',pointerEvents:'none'}}/>
           <div style={{position:'relative',zIndex:1,display:'flex',alignItems:'center',gap:28,flexWrap:'wrap'}}>
-            {/* Left: title + desc */}
             <div style={{flex:1,minWidth:240}}>
               <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
                 <div style={{width:36,height:36,borderRadius:10,background:'rgba(255,255,255,.15)',backdropFilter:'blur(10px)',border:'1px solid rgba(255,255,255,.25)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><Grid3X3 size={18} color="white"/></div>
@@ -668,7 +685,6 @@ function ArenaDetail({me,onBack,onBot,onFriends}:{me:Me;onBack:()=>void;onBot:()
               </div>
               <p style={{margin:0,fontSize:13,color:'rgba(255,255,255,.80)',lineHeight:1.5}}>Classic dots & boxes — claim the most squares to win.</p>
             </div>
-            {/* Right: buttons */}
             <div style={{display:'flex',gap:10,flexShrink:0,flexWrap:'wrap'}}>
               <button onClick={onBot} className="btn-press" style={{display:'inline-flex',alignItems:'center',gap:8,background:'white',border:'none',borderRadius:50,padding:'10px 22px',cursor:'pointer',fontSize:13,fontWeight:700,color:'#374151',fontFamily:"'Outfit',sans-serif",boxShadow:'0 4px 14px rgba(0,0,0,.16)',transition:'transform .2s,box-shadow .2s'}} onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 8px 24px rgba(0,0,0,.2)'}} onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,.16)'}}><Bot size={15} color="#6366f1"/> Play with Bot</button>
               <button onClick={onFriends} className="btn-press" style={{display:'inline-flex',alignItems:'center',gap:8,background:'rgba(255,255,255,.15)',border:'1.5px solid rgba(255,255,255,.35)',borderRadius:50,padding:'10px 22px',cursor:'pointer',fontSize:13,fontWeight:700,color:'white',fontFamily:"'Outfit',sans-serif",backdropFilter:'blur(8px)',transition:'background .2s'}} onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.25)'} onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,.15)'}><Users size={15} color="white"/> Play with Friends</button>
@@ -723,12 +739,10 @@ function ArenaDetail({me,onBack,onBot,onFriends}:{me:Me;onBack:()=>void;onBot:()
                   <div style={{width:24,textAlign:'center',flexShrink:0}}>{m?<span style={{fontSize:17}}>{m.emoji}</span>:<span style={{fontSize:11,fontWeight:700,color:'#cbd5e1'}}>#{idx+1}</span>}</div>
                   <Av src={e.profileImage} name={`${e.firstName} ${e.lastName}`} sz={32} color={m?m.nc:isMe?'#6366f1':'#94a3b8'}/>
                   <div style={{flex:1,minWidth:0,display:'flex',flexDirection:'column',gap:2}}>
-                    {/* Row 1: name + YOU badge */}
                     <div style={{display:'flex',alignItems:'center',gap:6}}>
                       <span style={{fontSize:13,fontWeight:700,color:'#0f172a',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.firstName} {e.lastName}</span>
                       {isMe&&<span style={{fontSize:8,fontWeight:800,color:'#6366f1',background:'#e0e7ff',padding:'1px 6px',borderRadius:5,flexShrink:0}}>YOU</span>}
                     </div>
-                    {/* Row 2: major · academicStanding */}
                     <div style={{display:'flex',alignItems:'center',gap:4,overflow:'hidden'}}>
                       {e.major&&<span style={{fontSize:10,fontWeight:500,color:'#94a3b8',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.major}</span>}
                       {e.major&&e.academicStanding&&<span style={{fontSize:10,color:'#d1d5db',flexShrink:0}}>·</span>}
@@ -737,7 +751,7 @@ function ArenaDetail({me,onBack,onBot,onFriends}:{me:Me;onBack:()=>void;onBot:()
                   </div>
                   <div style={{textAlign:'right',flexShrink:0}}>
                     <div style={{fontSize:idx<3?20:15,fontWeight:900,color:m?m.nc:isMe?'#6366f1':'#374151',letterSpacing:'-.03em',lineHeight:1}}>{e.weeklyScore}</div>
-                    <div style={{fontSize:9,color:'#94a3b8',marginTop:1}}>{e.gamesPlayed}g</div>
+                    <div style={{fontSize:9,color:'#94a3b8',marginTop:1}}>Games Played: {e.gamesPlayed}</div>
                   </div>
                 </div>
               )
@@ -760,9 +774,12 @@ function BotFlow({me,onBack}:{me:Me;onBack:()=>void}){
   const botLineTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
   const pendingBotMove=useRef<['h'|'v',number,number]|null>(null)
   const prevGameRef=useRef<GS|null>(null)
-  const start=(sz:number)=>{setGsz(sz);setGame(newGame(sz,2));setThink(false);setConf(false);setLastBotLine(null);pendingBotMove.current=null;setPhase('play')}
-  const replay=()=>{setGame(newGame(gsz,2));setThink(false);setConf(false);setLastBotLine(null);pendingBotMove.current=null;setPhase('play')}
+  const scorePosted=useRef(false)
+  const start=(sz:number)=>{setGsz(sz);setGame(newGame(sz,2));setThink(false);setConf(false);setLastBotLine(null);pendingBotMove.current=null;scorePosted.current=false;setPhase('play')}
+  const replay=()=>{setGame(newGame(gsz,2));setThink(false);setConf(false);setLastBotLine(null);pendingBotMove.current=null;scorePosted.current=false;setPhase('play')}
   const finish=useCallback(async(g:GS)=>{
+    if(scorePosted.current)return
+    scorePosted.current=true
     setPhase('done');if(g.scores[0]>g.scores[1])setConf(true)
     try{await fetch('/api/games/arena-grid/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:me.id,score:g.scores[0],won:g.scores[0]>g.scores[1],gridSize:gsz,mode:'bot',opponentCount:1})})}catch{}
   },[gsz,me.id])
@@ -794,14 +811,14 @@ function BotFlow({me,onBack}:{me:Me;onBack:()=>void}){
     pendingBotMove.current=null
     if(botLineTimer.current)clearTimeout(botLineTimer.current)
     setLastBotLine({t:mv[0],r:mv[1],c:mv[2]})
-    botLineTimer.current=setTimeout(()=>setLastBotLine(null),2000)
+    botLineTimer.current=setTimeout(()=>setLastBotLine(null),1200)
   },[game])
   const handleReact=(e:string)=>{const id=reactId;setReactId(p=>p+1);setReactions(p=>[...p,{id,emoji:e,x:10+Math.random()*80}]);setTimeout(()=>setReactions(p=>p.filter(r=>r.id!==id)),1000)}
 
   if(phase==='pick')return <SizePick title="vs Bot" sub="Solo game — score posts to campus leaderboard" onBack={onBack} onGo={start}/>
   if(!game)return null
   const ini=`${me.firstName[0]}${me.lastName[0]}`.toUpperCase()
-  const bps:BP[]=[{label:'You',ini,color:PRESET_COLORS[0],avatar:me.profileImage,major:me.major},{label:'Bot',ini:'AI',color:PRESET_COLORS[1],avatar:null,major:'AI Opponent'}]
+  const bps:BP[]=[{label:'You',ini,color:PRESET_COLORS[0],avatar:me.profileImage,major:me.major},{label:'Bot',ini:'BOT',color:PRESET_COLORS[1],avatar:null,major:'AI Opponent'}]
   const done=phase==='done',won=game.scores[0]>game.scores[1],draw=game.scores[0]===game.scores[1]
   const st=done?(won?'🎉 You win!':draw?'🤝 Draw!':'🤖 Bot wins!'):game.turn===1?'Your turn — click a line':'Bot is thinking…'
   const sc=done?(won?'#22c55e':draw?'#94a3b8':'#f87171'):game.turn===1?'#a78bfa':'#fbbf24'
@@ -816,7 +833,6 @@ function BotFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
 // ─── Floating Pixels Background ───────────────────────────────────
 const ICONS = [
-  // [emoji, top%, left%, size, rotation, opacity, animDuration, animDelay]
   ['🎮', 4,   6,   64, -15, 0.13, 18, 0],
   ['🏆', 6,   78,  56, 12,  0.12, 22, 1.5],
   ['🎯', 17,  22,  44, -8,  0.11, 20, 0.8],
@@ -858,9 +874,7 @@ function FloatingPixels(){
           lineHeight:1,
         } as React.CSSProperties}>{icon}</div>
       ))}
-      {/* Fine dot grid overlay */}
       <div style={{position:'absolute',inset:0,backgroundImage:'radial-gradient(circle,rgba(99,102,241,.09) 1.5px,transparent 1.5px)',backgroundSize:'26px 26px'}}/>
-      {/* Vignette edges */}
       <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at center,transparent 40%,rgba(240,244,255,.6) 100%)'}}/>
     </div>
   )
@@ -910,7 +924,6 @@ function DMSharePanel({me,code,inviteLink,onClose}:{me:Me;code:string;inviteLink
       <style>{`@keyframes panelUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}`}</style>
       <div style={{width:'100%',maxWidth:520,background:'white',borderRadius:'24px 24px 0 0',maxHeight:'82vh',display:'flex',flexDirection:'column',boxShadow:'0 -16px 48px rgba(0,0,0,.18)',animation:'panelUp .32s cubic-bezier(.34,1.1,.64,1) both'}}>
 
-        {/* Header */}
         <div style={{padding:'14px 20px 0',flexShrink:0}}>
           <div style={{width:40,height:4,borderRadius:4,background:'#e2e8f0',margin:'0 auto 16px'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
@@ -920,15 +933,11 @@ function DMSharePanel({me,code,inviteLink,onClose}:{me:Me;code:string;inviteLink
             </div>
             <button onClick={onClose} style={{width:32,height:32,borderRadius:10,background:'#f8fafc',border:'1.5px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:16,color:'#64748b',fontWeight:700}}>✕</button>
           </div>
-
-          {/* Code preview */}
           <div style={{background:'#f0f4ff',borderRadius:12,padding:'10px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
             <span style={{fontSize:11,fontWeight:700,color:'#6366f1'}}>Code:</span>
             <span style={{fontSize:22,fontWeight:900,color:'#3730a3',letterSpacing:'.2em',fontFamily:"'Outfit',sans-serif"}}>{code}</span>
             <span style={{fontSize:11,color:'#94a3b8',marginLeft:'auto'}}>tap Send →</span>
           </div>
-
-          {/* Search */}
           <div style={{position:'relative',marginBottom:12}}>
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}}><circle cx="9" cy="9" r="6" stroke="#94a3b8" strokeWidth="2"/><path d="M15 15l3 3" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round"/></svg>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search classmates…"
@@ -936,7 +945,6 @@ function DMSharePanel({me,code,inviteLink,onClose}:{me:Me;code:string;inviteLink
           </div>
         </div>
 
-        {/* List */}
         <div style={{flex:1,overflowY:'auto',padding:'0 20px 24px'}}>
           {loading&&!classmates.length
             ?<div style={{display:'flex',justifyContent:'center',padding:'28px 0'}}><Spin sz={22}/></div>
@@ -989,7 +997,6 @@ function RoomChat({msgs,myId,players,input,setInput,onSend,onClose}:{
 }){
   const[showEmoji,setShowEmoji]=useState(false)
   const bottomRef=useRef<HTMLDivElement|null>(null)
-  // Drag state
   const[pos,setPos]=useState<{x:number;y:number}|null>(null)
   const dragging=useRef(false)
   const dragOffset=useRef({x:0,y:0})
@@ -999,7 +1006,6 @@ function RoomChat({msgs,myId,players,input,setInput,onSend,onClose}:{
 
   const fmt=(ts:number)=>new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})
 
-  // ── Drag handlers ──
   const onMouseDown=(e:React.MouseEvent)=>{
     if((e.target as HTMLElement).closest('button')||(e.target as HTMLElement).closest('input'))return
     dragging.current=true
@@ -1035,7 +1041,7 @@ function RoomChat({msgs,myId,players,input,setInput,onSend,onClose}:{
     }}>
       <style>{`@keyframes chatPopUp{from{opacity:0;transform:scale(.92) translateY(12px)}to{opacity:1;transform:none}}`}</style>
 
-      {/* Header — drag handle */}
+      {/* Header — drag handle, NO player avatars */}
       <div onMouseDown={onMouseDown} style={{
         flexShrink:0,padding:'11px 14px',
         background:'linear-gradient(135deg,#6366f1,#7c3aed)',
@@ -1045,21 +1051,16 @@ function RoomChat({msgs,myId,players,input,setInput,onSend,onClose}:{
         <div style={{flex:1}}>
           <div style={{fontSize:13,fontWeight:800,color:'white',letterSpacing:'-.01em'}}>Room Chat</div>
         </div>
-        {/* Player avatar dots */}
-        <div style={{display:'flex',gap:4,marginRight:4}}>
-          {players.map((p,i)=>(
-            p.profileImage
-              ?<img key={i} src={p.profileImage} title={p.firstName} style={{width:22,height:22,borderRadius:'50%',objectFit:'cover',border:'2px solid rgba(255,255,255,.5)'}}/>
-              :<div key={i} title={p.firstName} style={{width:22,height:22,borderRadius:'50%',background:p.color,border:'2px solid rgba(255,255,255,.5)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:800,color:'white'}}>
-                {(p.firstName[0]||'')+(p.lastName[0]||'')}
-              </div>
-          ))}
+        {/* Online count badge */}
+        <div style={{display:'flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.18)',borderRadius:10,padding:'3px 9px',marginRight:4}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:'#4ade80'}}/>
+          <span style={{fontSize:10,fontWeight:700,color:'white'}}>{players.length}</span>
         </div>
         <button onClick={onClose} style={{width:26,height:26,borderRadius:8,background:'rgba(255,255,255,.2)',border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'white',fontSize:13,fontWeight:700,flexShrink:0}}>✕</button>
       </div>
 
       {/* Messages */}
-      <div style={{height:300,overflowY:'auto',padding:'10px 12px',display:'flex',flexDirection:'column',gap:8,background:'#fafbff'}}>
+      <div style={{height:300,overflowY:'auto',padding:'10px 12px',display:'flex',flexDirection:'column',gap:2,background:'#fafbff'}}>
         {msgs.length===0&&(
           <div style={{textAlign:'center',padding:'50px 0',color:'#94a3b8'}}>
             <div style={{fontSize:24,marginBottom:6}}>👋</div>
@@ -1067,32 +1068,37 @@ function RoomChat({msgs,myId,players,input,setInput,onSend,onClose}:{
           </div>
         )}
         {msgs.map((m,i)=>{
-          const isMe=players.find(p=>p.userId===myId)?.color===m.color
-          const sender=players.find(p=>p.color===m.color)
-          const showAvatar=i===0||msgs[i-1].color!==m.color
+          // Match sender by color (each player has unique color assigned at room join)
+          const myPlayer=players.find(p=>p.userId===myId)
+          const isMe=!!myPlayer&&myPlayer.color===m.color
+          // Show avatar only on first message of each consecutive group from same sender
+          const showAvatar=i===0||msgs[i-1].from!==m.from||msgs[i-1].color!==m.color
+          // Use profileImage stored directly on the message (set at send time)
+          const avatarNode=m.profileImage
+            ?<img src={m.profileImage} alt={m.from} style={{width:30,height:30,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${m.color}55`,boxShadow:'0 1px 6px rgba(0,0,0,.1)'}}/>
+            :<div style={{width:30,height:30,borderRadius:'50%',background:`${m.color}20`,border:`2px solid ${m.color}45`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:m.color,flexShrink:0}}>
+                {(m.from||'?')[0].toUpperCase()}
+              </div>
+          const fmt2=(ts:number)=>new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})
           return(
-            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start',gap:1}}>
-              <div style={{display:'flex',alignItems:'flex-end',gap:6,flexDirection:isMe?'row-reverse':'row'}}>
-                {/* Avatar — shown on first message in a group */}
-                {!isMe&&(
-                  showAvatar
-                    ?(sender?.profileImage
-                      ?<img src={sender.profileImage} alt="" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${m.color}50`}}/>
-                      :<div style={{width:28,height:28,borderRadius:'50%',background:m.color+'22',border:`2px solid ${m.color}50`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:m.color,flexShrink:0}}>
-                        {m.from[0]?.toUpperCase()}
-                      </div>)
-                    :<div style={{width:28,flexShrink:0}}/>
-                )}
-                <div style={{display:'flex',flexDirection:'column',gap:1,alignItems:isMe?'flex-end':'flex-start',maxWidth:200}}>
-                  {showAvatar&&!isMe&&<div style={{fontSize:9,fontWeight:700,color:m.color,paddingLeft:2}}>{m.from}</div>}
+            <div key={i} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start',gap:1,marginBottom:2}}>
+              <div style={{display:'flex',alignItems:'flex-end',gap:7,flexDirection:isMe?'row-reverse':'row'}}>
+                {/* WhatsApp-style: avatar on first msg of each group, spacer otherwise */}
+                {showAvatar ? avatarNode : <div style={{width:30,flexShrink:0}}/>}
+                <div style={{display:'flex',flexDirection:'column',gap:1,alignItems:isMe?'flex-end':'flex-start',maxWidth:210}}>
+                  {/* Sender name — only for others, first msg of group */}
+                  {showAvatar&&!isMe&&(
+                    <div style={{fontSize:9,fontWeight:700,color:m.color,paddingLeft:3,marginBottom:1}}>{m.from}</div>
+                  )}
                   <div style={{
-                    padding:'7px 11px',
-                    borderRadius:isMe?'12px 3px 12px 12px':'3px 12px 12px 12px',
-                    background:isMe?'linear-gradient(135deg,#6366f1,#7c3aed)':'#eef2ff',
-                    color:isMe?'white':'#1e293b',fontSize:12,lineHeight:1.5,wordBreak:'break-word',
-                    boxShadow:isMe?'0 2px 8px rgba(99,102,241,.25)':'none',
+                    padding:'7px 12px',
+                    borderRadius:isMe?'14px 4px 14px 14px':'4px 14px 14px 14px',
+                    background:isMe?'linear-gradient(135deg,#6366f1,#7c3aed)':'white',
+                    color:isMe?'white':'#1e293b',fontSize:12,lineHeight:1.55,wordBreak:'break-word',
+                    boxShadow:isMe?'0 2px 8px rgba(99,102,241,.28)':'0 1px 4px rgba(0,0,0,.07)',
+                    border:isMe?'none':'1px solid #eff1f7',
                   }}>{m.text}</div>
-                  <div style={{fontSize:8,color:'#cbd5e1'}}>{fmt(m.ts)}</div>
+                  <div style={{fontSize:8,color:'#c4c9d4',marginTop:2}}>{fmt2(m.ts)}</div>
                 </div>
               </div>
             </div>
@@ -1159,7 +1165,12 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
   const[joinError,setJoinError]=useState('')
   const[joining,setJoining]=useState(false)
   const[showChat,setShowChat]=useState(false)
+  const showChatRef=useRef(false)
   const[unreadChat,setUnreadChat]=useState(0)
+  const[lastOpponentLine,setLastOpponentLine]=useState<{t:'h'|'v';r:number;c:number}|null>(null)
+  const friendsScorePosted=useRef(false)
+  const opponentLineTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
+  const prevGameStateRef=useRef<GS|null>(null)
 
   const pollRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const countdownRef=useRef<ReturnType<typeof setInterval>|null>(null)
@@ -1171,6 +1182,35 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
   const startPoll=useCallback((c:string)=>{
     stopPoll()
+    // ── Ably real-time subscription for instant chat + moves ──
+    try{
+      const{getAblyClient}=require('@/lib/ably-client')
+      const ably=getAblyClient(me.id)
+      const ch=ably.channels.get(`game-room-${c}`)
+      ch.subscribe('chat-message',(msg:any)=>{
+        const m=msg.data as ChatMsg
+        setChatMsgs(prev=>{
+          if(prev.find(x=>x.ts===m.ts&&x.from===m.from))return prev
+          return [...prev,m]
+        })
+        // Auto-open chat for everyone when a message arrives; just clear unread if already open
+        if(!showChatRef.current){
+          setShowChat(true);showChatRef.current=true;setUnreadChat(0)
+        } else {
+          setUnreadChat(0)
+        }
+      })
+      ch.subscribe('move-made',(msg:any)=>{
+        const{gameState,move,userId:mover}=msg.data
+        if(mover===me.id)return
+        if(gameState)setGame(gameState)
+        if(move){
+          if(opponentLineTimer.current)clearTimeout(opponentLineTimer.current)
+          setLastOpponentLine(move)
+          opponentLineTimer.current=setTimeout(()=>setLastOpponentLine(null),1200)
+        }
+      })
+    }catch(e){console.warn('Ably subscription failed, falling back to poll',e)}
     pollRef.current=setInterval(async()=>{
       try{
         const r=await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1180,14 +1220,36 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         setRP(rm.players??[])
         if(rm.chat){
           setChatMsgs(rm.chat)
-          // increment unread only if drawer is closed
-          setUnreadChat(prev=>showChat?0:rm.chat.length>0?rm.chat.length-(prev):prev)
+          setUnreadChat(prev=>showChatRef.current?0:rm.chat.length>0?rm.chat.length-(prev):prev)
         }
         if(rm.lastReaction&&rm.lastReaction.ts>Date.now()-1500){
           setReactId(p=>{const id=p;setReactions(prev=>[...prev,{id,emoji:rm.lastReaction.emoji,x:10+Math.random()*80}]);setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000);return p+1})
         }
         if(rm.status==='playing'&&rm.gameState){
-          setGame(rm.gameState);setPhase('play')
+          const newGs=rm.gameState
+          if(prevGameStateRef.current&&newGs&&phase==='play'){
+            const prev=prevGameStateRef.current
+            let foundLine:{t:'h'|'v';r:number;c:number}|null=null
+            outer: for(let r=0;r<=newGs.rows;r++)for(let c=0;c<newGs.cols;c++){
+              if((newGs.hLines[r]?.[c]??0)&&!(prev.hLines[r]?.[c]??0)){foundLine={t:'h',r,c};break outer}
+            }
+            if(!foundLine){
+              outer2: for(let r=0;r<newGs.rows;r++)for(let c=0;c<=newGs.cols;c++){
+                if((newGs.vLines[r]?.[c]??0)&&!(prev.vLines[r]?.[c]??0)){foundLine={t:'v',r,c};break outer2}
+              }
+            }
+            if(foundLine){
+              const lineOwner=foundLine.t==='h'?newGs.hLines[foundLine.r]?.[foundLine.c]:newGs.vLines[foundLine.r]?.[foundLine.c]
+              const myPlayerIdx=rm.players.findIndex((p:RoomPlayer)=>p.userId===me.id)
+              if(lineOwner&&lineOwner-1!==myPlayerIdx){
+                if(opponentLineTimer.current)clearTimeout(opponentLineTimer.current)
+                setLastOpponentLine(foundLine)
+                opponentLineTimer.current=setTimeout(()=>setLastOpponentLine(null),1200)
+              }
+            }
+          }
+          prevGameStateRef.current=newGs
+          setGame(newGs);setPhase('play')
           const idx=rm.players.findIndex((p:RoomPlayer)=>p.userId===me.id)
           setMyIdx(idx>=0?idx:0)
         }
@@ -1208,7 +1270,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     return()=>{if(countdownRef.current)clearInterval(countdownRef.current)}
   },[roomExpiresAt])
 
-  // Restore room from localStorage on mount
   useEffect(()=>{
     try{
       const s=localStorage.getItem('cg_room')
@@ -1224,8 +1285,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
       }
     }catch{clearRoom()}
   },[])
-
-
 
   const createRoom=async()=>{
     setCreating(true)
@@ -1257,10 +1316,8 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         setCode(d.room.code);setIsHost(false);setRP(d.room.players||[])
         const link=`${window.location.origin}/home/campus-games?join=${d.room.code}`
         setInviteLink(link);setPhase('waiting');startPoll(d.room.code)
-        // Remove join param from URL without reload
         try{const u=new URL(window.location.href);u.searchParams.delete('join');window.history.replaceState({},'',u.toString())}catch{}
       }else{
-        // Show expired message differently from generic errors
         if(d.expired){
           setJoinError('⏰ Room has expired. Ask your friend to create a new one, or create your own.')
         }else{
@@ -1271,8 +1328,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     setJoining(false)
   }
 
-
-  // Auto-join from ?join= URL param — placed after joinRoom is defined
   useEffect(()=>{
     try{
       const p=new URLSearchParams(window.location.search)
@@ -1282,6 +1337,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
   },[])
 
   const launchGame=async(sz:number)=>{
+    friendsScorePosted.current=false
     try{
       await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})})
@@ -1302,8 +1358,12 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
       const mx=Math.max(...n.scores)
       const won=n.scores[myIdx]===mx&&n.scores.filter(s=>s===mx).length===1
       if(won)setConf(true);setPhase('done')
-      try{await fetch('/api/games/arena-grid/score',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({userId:me.id,score:n.scores[myIdx],won,gridSize:gsz,mode:'friends',opponentCount:rPlayers.length-1})})}catch{}
+      // Guard: only post score once per game
+      if(!friendsScorePosted.current){
+        friendsScorePosted.current=true
+        try{await fetch('/api/games/arena-grid/score',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({userId:me.id,score:n.scores[myIdx],won,gridSize:gsz,mode:'friends',opponentCount:rPlayers.length-1})})}catch{}
+      }
     }
   }
 
@@ -1316,10 +1376,16 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
   const sendChat=async()=>{
     if(!chatInput.trim())return
     const myColor=rPlayers.find(p=>p.userId===me.id)?.color??PRESET_COLORS[0]
-    const msg:ChatMsg={from:me.firstName,text:chatInput.trim(),color:myColor,ts:Date.now()}
+    const myPlayer=rPlayers.find(p=>p.userId===me.id)
+    const msg:ChatMsg={from:me.firstName,text:chatInput.trim(),color:myColor,ts:Date.now(),profileImage:myPlayer?.profileImage??me.profileImage??null}
     setChatMsgs(p=>[...p,msg]);setChatInput('')
-    try{await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code,userId:me.id,chat:msg})})}catch{}
+    try{
+      const{getAblyClient}=require('@/lib/ably-client')
+      const ably=getAblyClient(me.id)
+      ably.channels.get(`game-room-${code}`).publish('chat-message',msg).catch(()=>{})
+      await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({code,userId:me.id,chat:msg})})
+    }catch{}
   }
 
   const resetBack=()=>{
@@ -1327,7 +1393,8 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     if(countdownRef.current)clearInterval(countdownRef.current)
     setPhase('setup');setGame(null);setConf(false);setCode('')
     setRP([]);setJoinCode('');setJoinError('');setChatMsgs([])
-    setRoomExpiresAt(null);setSecondsLeft(300);setShowDMPanel(false);setShowChat(false);setUnreadChat(0)
+    setRoomExpiresAt(null);setSecondsLeft(300);setShowDMPanel(false)
+    setShowChat(false);showChatRef.current=false;setUnreadChat(0)
   }
 
   const copyVal=(v:string,k:'code'|'link')=>{
@@ -1351,7 +1418,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
       <FloatingPixels/>
 
-      {/* Topbar */}
       <div style={{flexShrink:0,background:'rgba(255,255,255,.88)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(232,234,246,.8)',padding:'14px 22px',display:'flex',alignItems:'center',gap:12,position:'relative',zIndex:2}}>
         <button onClick={onBack} style={{width:38,height:38,borderRadius:12,background:'white',border:'1.5px solid #e8eaf6',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',boxShadow:'0 1px 6px rgba(0,0,0,.06)'}}>
           <ArrowLeft size={16} color="#64748b"/>
@@ -1365,7 +1431,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
       <div style={{flex:1,overflowY:'auto',padding:'24px 20px 36px',position:'relative',zIndex:1}}>
         <div style={{maxWidth:500,margin:'0 auto',display:'flex',flexDirection:'column',gap:14}}>
 
-          {/* Squad size */}
           <div style={{background:'white',borderRadius:22,border:'1.5px solid #f0f0f7',padding:'18px 20px',boxShadow:'0 4px 24px rgba(99,102,241,.06)',animation:'fadeUp .4s ease both'}}>
             <div style={{fontSize:11,fontWeight:800,color:'#94a3b8',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:14}}>Squad Size</div>
             <div style={{display:'flex',gap:10}}>
@@ -1384,7 +1449,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
             </div>
           </div>
 
-          {/* Create room card */}
           <div className="create-card" onClick={creating?undefined:createRoom} style={{
             background:'white',borderRadius:22,border:'1.5px solid rgba(99,102,241,.2)',
             padding:'26px 24px',boxShadow:'0 6px 28px rgba(99,102,241,.08)',
@@ -1412,7 +1476,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
             </div>
           </div>
 
-          {/* Join via code */}
           <div style={{background:'white',borderRadius:22,border:'1.5px solid #f0f0f7',padding:'20px 20px',boxShadow:'0 4px 16px rgba(0,0,0,.04)',animation:'fadeUp .4s .14s ease both',animationFillMode:'forwards',position:'relative',overflow:'hidden'}}>
             <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#f59e0b,#fbbf24)'}}/>
             <div style={{fontSize:11,fontWeight:800,color:'#94a3b8',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:8}}>Have a Code?</div>
@@ -1457,7 +1520,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     const allJoined=rPlayers.length>=total
     const mm=String(Math.floor(secondsLeft/60)).padStart(2,'0')
     const ss2=String(secondsLeft%60).padStart(2,'0')
-    const goToChat=()=>{if(roomExpiresAt)saveRoom(code,isHost,roomExpiresAt,total);window.location.href='/home'}
 
     return(
       <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4ff',position:'relative',overflow:'hidden'}}>
@@ -1471,12 +1533,9 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
         <FloatingPixels/>
 
-        {/* DM Panel */}
         {showDMPanel&&<DMSharePanel me={me} code={code} inviteLink={inviteLink} onClose={()=>setShowDMPanel(false)}/>}
-        {/* Room Chat Drawer */}
-        {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>setShowChat(false)}/>}
+        {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
 
-        {/* Topbar */}
         <div style={{flexShrink:0,background:'rgba(255,255,255,.9)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(232,234,246,.8)',padding:'14px 22px',display:'flex',alignItems:'center',gap:12,position:'relative',zIndex:2}}>
           <button onClick={resetBack} style={{width:38,height:38,borderRadius:12,background:'white',border:'1.5px solid #e8eaf6',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
             <ArrowLeft size={16} color="#64748b"/>
@@ -1485,28 +1544,20 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
             <div style={{fontSize:18,fontWeight:900,color:'#0f172a',letterSpacing:'-.03em',lineHeight:1}}>Waiting Room</div>
             <div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>Share your code — friends join instantly</div>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:6,background:secondsLeft<60?'#fef2f2':'#f0fdf4',border:`1.5px solid ${secondsLeft<60?'#fca5a5':'#86efac'}`,borderRadius:20,padding:'5px 12px'}}>
-            <div style={{width:7,height:7,borderRadius:'50%',background:secondsLeft<60?'#ef4444':'#22c55e',animation:'dotBlink 1.5s ease-in-out infinite'}}/>
-            <span style={{fontSize:12,fontWeight:800,color:secondsLeft<60?'#ef4444':'#16a34a',fontFamily:'monospace'}}>{mm}:{ss2}</span>
-          </div>
+
         </div>
 
         <div style={{flex:1,overflowY:'auto',padding:'18px 20px 36px',position:'relative',zIndex:1}}>
           <div style={{maxWidth:500,margin:'0 auto',display:'flex',flexDirection:'column',gap:12}}>
 
-            {/* Room code card — plain white */}
             <div style={{background:'white',borderRadius:20,border:'1.5px solid #e0e7ff',padding:'20px 22px',boxShadow:'0 4px 20px rgba(99,102,241,.08)',animation:'waitUp .4s ease both'}}>
               <div style={{fontSize:10,fontWeight:800,color:'#94a3b8',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:12}}>Room Code — Share with friends</div>
-
-              {/* Big code */}
               <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
                 <span style={{fontSize:42,fontWeight:900,color:'#3730a3',letterSpacing:'.18em',fontFamily:"'Outfit',sans-serif",flex:1,lineHeight:1}}>{code}</span>
                 <button onClick={()=>copyVal(code,'code')} style={{height:38,borderRadius:10,background:copied==='code'?'#10b981':'#eef2ff',border:`1.5px solid ${copied==='code'?'#10b981':'#c7d2fe'}`,color:copied==='code'?'white':'#6366f1',padding:'0 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:700,whiteSpace:'nowrap',transition:'all .2s',fontFamily:"'Outfit',sans-serif"}}>
                   {copied==='code'?'✓ Copied!':'Copy Code'}
                 </button>
               </div>
-
-              {/* Action buttons */}
               <div style={{display:'flex',gap:8}}>
                 <button onClick={()=>copyVal(inviteLink,'link')} style={{flex:1,height:40,borderRadius:10,background:copied==='link'?'#10b981':'#f8fafc',border:`1.5px solid ${copied==='link'?'#10b981':'#e2e8f0'}`,color:copied==='link'?'white':'#374151',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,transition:'all .2s',fontFamily:"'Outfit',sans-serif"}}>
                   {copied==='link'?'✓ Copied!':'🔗 Copy Link'}
@@ -1517,20 +1568,18 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
               </div>
             </div>
 
-            {/* Hint banner */}
             <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:14,padding:'10px 16px',display:'flex',alignItems:'center',gap:10,animation:'waitUp .4s .06s ease both',animationFillMode:'forwards'}}>
               <span style={{fontSize:16}}>💡</span>
-              <span style={{fontSize:12,color:'#92400e',fontWeight:600,flex:1}}>Room stays open for <strong>{mm}:{ss2}</strong> — you can leave and come back!</span>
-              <button onClick={()=>{setShowChat(true);setUnreadChat(0)}} style={{background:'#6366f1',border:'none',borderRadius:9,padding:'6px 13px',color:'white',cursor:'pointer',fontSize:11,fontWeight:800,whiteSpace:'nowrap',fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',gap:5}}>
-              💬 Chat
-            </button>
+              <span style={{fontSize:12,color:'#92400e',fontWeight:600,flex:1}}>Room stays open — you can leave and come back!</span>
+              <button onClick={()=>{setShowChat(true);showChatRef.current=true;setUnreadChat(0)}} style={{background:'#6366f1',border:'none',borderRadius:9,padding:'6px 13px',color:'white',cursor:'pointer',fontSize:11,fontWeight:800,whiteSpace:'nowrap',fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',gap:5}}>
+                💬 Chat
+              </button>
             </div>
 
-            {/* Players roster */}
             <div style={{background:'white',borderRadius:20,border:'1.5px solid #f0f0f7',padding:'16px 18px',boxShadow:'0 4px 20px rgba(0,0,0,.05)',animation:'waitUp .4s .12s ease both',animationFillMode:'forwards'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
                 <span style={{fontSize:11,fontWeight:800,color:'#94a3b8',letterSpacing:'.1em',textTransform:'uppercase'}}>Players {rPlayers.length}/{total}</span>
-                {allJoined&&<span style={{fontSize:11,fontWeight:700,color:'#10b981',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:20,padding:'2px 10px'}}>Everyone's in ✓</span>}
+                {allJoined&&<span style={{fontSize:11,fontWeight:700,color:'#10b981',background:'#f0fdf4',border:'1px solid #86efac',borderRadius:20,padding:'2px 10px'}}>Everyone&apos;s in ✓</span>}
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {Array.from({length:total},(_,i)=>{
@@ -1562,22 +1611,31 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
               </div>
             </div>
 
-            {/* Host start / non-host wait */}
             {isHost?(
-              <button onClick={()=>setPhase('sizepick')} disabled={!allJoined}
-                style={{width:'100%',height:54,borderRadius:15,border:'none',
-                  cursor:allJoined?'pointer':'not-allowed',
-                  background:allJoined?'linear-gradient(135deg,#6366f1,#7c3aed)':'#f1f5f9',
-                  color:allJoined?'white':'#94a3b8',fontSize:15,fontWeight:800,
-                  fontFamily:"'Outfit',sans-serif",
-                  boxShadow:allJoined?'0 8px 28px rgba(99,102,241,.35)':'none',
-                  transition:'all .3s'}}>
-                {allJoined?`Let's go — Choose Grid Size →`:`Waiting for ${total-rPlayers.length} more…`}
-              </button>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <button onClick={()=>setPhase('sizepick')} disabled={!allJoined}
+                  style={{width:'100%',height:54,borderRadius:15,border:'none',
+                    cursor:allJoined?'pointer':'not-allowed',
+                    background:allJoined?'linear-gradient(135deg,#6366f1,#7c3aed)':'#f1f5f9',
+                    color:allJoined?'white':'#94a3b8',fontSize:15,fontWeight:800,
+                    fontFamily:"'Outfit',sans-serif",
+                    boxShadow:allJoined?'0 8px 28px rgba(99,102,241,.35)':'none',
+                    transition:'all .3s'}}>
+                  {allJoined?`Let's go — Choose Grid Size →`:`Waiting for ${total-rPlayers.length} more…`}
+                </button>
+                <button onClick={resetBack} style={{width:'100%',height:40,borderRadius:12,border:'1.5px solid #fca5a5',background:'white',color:'#ef4444',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
+                  Leave Room
+                </button>
+              </div>
             ):(
-              <div style={{background:'white',borderRadius:15,padding:'16px',textAlign:'center',border:'1.5px solid #f0f0f7',display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
-                <div style={{width:16,height:16,border:'2px solid #e2e8f0',borderTopColor:'#6366f1',borderRadius:'50%',animation:'spin .75s linear infinite'}}/>
-                <span style={{fontSize:13,fontWeight:600,color:'#64748b'}}>Waiting for host to start…</span>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{background:'white',borderRadius:15,padding:'16px',textAlign:'center',border:'1.5px solid #f0f0f7',display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+                  <div style={{width:16,height:16,border:'2px solid #e2e8f0',borderTopColor:'#6366f1',borderRadius:'50%',animation:'spin .75s linear infinite'}}/>
+                  <span style={{fontSize:13,fontWeight:600,color:'#64748b'}}>Waiting for host to start…</span>
+                </div>
+                <button onClick={resetBack} style={{width:'100%',height:40,borderRadius:12,border:'1.5px solid #fca5a5',background:'white',color:'#ef4444',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
+                  Leave Room
+                </button>
               </div>
             )}
           </div>
@@ -1619,9 +1677,9 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         <Board game={game} bps={bpsCurrent} myTurn={myTurn} onLine={onLine} onBack={resetBack}
           status={st} stColor={sc} done={false} reactions={reactions}
           onReact={handleReact} chatMsgs={chatMsgs} chatInput={chatInput}
-          setChatInput={setChatInput} sendChat={sendChat} isMulti={false}/>
-        {/* Floating chat bubble */}
-        <button onClick={()=>{setShowChat(s=>!s);setUnreadChat(0)}} style={{
+          setChatInput={setChatInput} sendChat={sendChat} isMulti={false}
+          lastBotLine={lastOpponentLine}/>
+        <button onClick={()=>{const next=!showChat;setShowChat(next);setUnreadChat(0);showChatRef.current=next}} style={{
           position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',
           background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',cursor:'pointer',
           display:'flex',alignItems:'center',justifyContent:'center',
@@ -1632,7 +1690,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
           <span style={{fontSize:22}}>💬</span>
           {unreadChat>0&&<div style={{position:'absolute',top:0,right:0,width:18,height:18,borderRadius:'50%',background:'#ef4444',border:'2px solid white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'white'}}>{unreadChat>9?'9+':unreadChat}</div>}
         </button>
-        {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>setShowChat(false)}/>}
+        {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
       </div>
     )
   }
@@ -1643,7 +1701,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         onAgain={()=>{setPhase('setup');setGame(null);setConf(false)}}
         onBack={resetBack} showConf={conf} rPlayers={rPlayers}
         onShare={()=>alert('Share to Campus Talks coming soon!')}/>
-      <button onClick={()=>{setShowChat(s=>!s);setUnreadChat(0)}} style={{
+      <button onClick={()=>{const next=!showChat;setShowChat(next);setUnreadChat(0);showChatRef.current=next}} style={{
         position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',
         background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',cursor:'pointer',
         display:'flex',alignItems:'center',justifyContent:'center',
@@ -1652,7 +1710,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         <span style={{fontSize:22}}>💬</span>
         {unreadChat>0&&<div style={{position:'absolute',top:0,right:0,width:18,height:18,borderRadius:'50%',background:'#ef4444',border:'2px solid white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'white'}}>{unreadChat}</div>}
       </button>
-      {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>setShowChat(false)}/>}
+      {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
     </div>
   )
 
@@ -1666,7 +1724,15 @@ export default function CampusGamesPage(){
   const router=useRouter()
   const[screen,setScreen]=useState<Screen>('hub')
   const[me,setMe]=useState<Me|null>(null)
-  useEffect(()=>{try{const raw=localStorage.getItem('user');if(!raw){router.push('/auth');return};setMe(JSON.parse(raw))}catch{router.push('/auth')}},[router])
+  useEffect(()=>{
+    try{
+      const raw=localStorage.getItem('user')
+      if(!raw){router.push('/auth');return}
+      setMe(JSON.parse(raw))
+      const p=new URLSearchParams(window.location.search)
+      if(p.get('join'))setScreen('friends')
+    }catch{router.push('/auth')}
+  },[router])
   if(!me)return(<div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'#f5f7ff'}}><style>{`@keyframes sp{to{transform:rotate(360deg)}}`}</style><Loader2 size={28} color="#6366f1" style={{animation:'sp 1s linear infinite'}}/></div>)
   if(screen==='hub')return <Hub me={me} onArena={()=>setScreen('arena')}/>
   if(screen==='arena')return <ArenaDetail me={me} onBack={()=>setScreen('hub')} onBot={()=>setScreen('bot')} onFriends={()=>setScreen('friends')}/>

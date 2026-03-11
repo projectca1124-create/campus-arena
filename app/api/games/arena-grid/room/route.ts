@@ -155,6 +155,9 @@ export async function PATCH(request: Request) {
     if (move) {
       await publishEvent(`game-room-${code}`, 'move-made', { userId, move, gameState }).catch(() => {})
     }
+    if (chat) {
+      await publishEvent(`game-room-${code}`, 'chat-message', chat).catch(() => {})
+    }
 
     return Response.json({ success: true })
   } catch (error) {
