@@ -5,7 +5,7 @@ import { publishEvent } from '@/lib/ably-server'
 const prisma = new PrismaClient()
 
 const PLAYER_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#e11d48']
-const ROOM_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const ROOM_TTL_MS = 5 * 60 * 1000
 
 function generateCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase()
@@ -25,7 +25,6 @@ export async function POST(request: Request) {
     if (action === 'create') {
       const roomCode = generateCode()
       const expiresAt = new Date(Date.now() + ROOM_TTL_MS)
-
       const room = await (prisma as any).gameRoom.create({
         data: {
           code: roomCode,
@@ -33,18 +32,16 @@ export async function POST(request: Request) {
           gridSize: gridSize || 9,
           hostId: userId,
           status: 'waiting',
-          expiresAt,          // ← store expiry in DB
-          players: [
-            {
-              userId,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              profileImage: user.profileImage,
-              major: user.major,
-              color: PLAYER_COLORS[0],
-              ready: true,
-            },
-          ],
+          expiresAt,
+          players: [{
+            userId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImage: user.profileImage,
+            major: user.major,
+            color: PLAYER_COLORS[0],
+            ready: true,
+          }],
         },
       })
       return Response.json({ success: true, room })
@@ -57,11 +54,9 @@ export async function POST(request: Request) {
       const room = await (prisma as any).gameRoom.findUnique({ where: { code } })
       if (!room) return Response.json({ error: 'Room not found. Check your code and try again.' }, { status: 404 })
 
-      // ── Expiry check ──────────────────────────────────────────
       if (room.expiresAt && new Date(room.expiresAt) < new Date()) {
         return Response.json({ error: 'Room has expired. Ask your friend to create a new one.', expired: true }, { status: 410 })
       }
-
       if (room.status === 'playing') return Response.json({ error: 'Game already started.' }, { status: 400 })
       if (room.status === 'finished') return Response.json({ error: 'This game has already finished.', expired: true }, { status: 410 })
 
@@ -86,6 +81,7 @@ export async function POST(request: Request) {
         data: { players: updatedPlayers },
       })
 
+      // Notify all players in the room instantly via Ably
       await publishEvent(`game-room-${code}`, 'player-joined', {
         player: newPlayer,
         players: updatedPlayers,
@@ -108,6 +104,7 @@ export async function POST(request: Request) {
         data: { status: 'playing' },
       })
 
+      // Publish game-started — client initialises fresh game from gridSize
       await publishEvent(`game-room-${code}`, 'game-started', {
         room: updatedRoom,
         gridSize: room.gridSize,
@@ -131,7 +128,7 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH — submit a move / sync game state
+// PATCH — move / game state / chat / reaction
 export async function PATCH(request: Request) {
   try {
     const { code, userId, move, gameState, chat, reaction } = await request.json()
@@ -143,7 +140,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {}
     if (gameState !== undefined) updateData.gameState = gameState
     if (chat) {
-      const existing = room.chat || []
+      const existing = (room.chat as any[]) || []
       updateData.chat = [...existing, chat].slice(-50)
     }
     if (reaction) updateData.lastReaction = reaction
@@ -152,16 +149,18 @@ export async function PATCH(request: Request) {
       await (prisma as any).gameRoom.update({ where: { code }, data: updateData })
     }
 
-    if (move) {
-      await publishEvent(`game-room-${code}`, 'move-made', { userId, move, gameState }).catch(() => {})
-    }
+    // Moves are published directly by the client via Ably for zero-latency delivery
+    // Server only persists gameState to DB — no re-publishing here
+
+    // Publish chat via Ably — this is the ONLY place chat is published to Ably
+    // Client never publishes directly; all chat goes through here
     if (chat) {
       await publishEvent(`game-room-${code}`, 'chat-message', chat).catch(() => {})
     }
 
     return Response.json({ success: true })
   } catch (error) {
-    console.error('Move error:', error)
+    console.error('PATCH error:', error)
     return Response.json({ error: 'Failed' }, { status: 500 })
   }
 }

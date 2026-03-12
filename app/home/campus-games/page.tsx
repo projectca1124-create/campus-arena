@@ -389,20 +389,18 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
                 const avatarSize=Math.max(CELL*.52,18)
                 const ini=(pl?.ini||pl?.label?.slice(0,2)||'?').toUpperCase()
                 return <div key={`b${r}${c}`} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+LW,top:DOT/2+r*(CELL+LW)+LW,width:CELL,height:CELL,borderRadius:6,background:`${color}1e`,display:'flex',alignItems:'center',justifyContent:'center',animation:anim.has(`${r}-${c}`)?'pop .45s cubic-bezier(.34,1.56,.64,1) both':'none'}}>
-                  {pl?.avatar
-                    ?<img src={pl.avatar} alt="" style={{width:avatarSize,height:avatarSize,borderRadius:'50%',objectFit:'cover',opacity:.85,border:`1.5px solid ${color}60`,boxShadow:`0 1px 6px ${color}40`}}/>
-                    :<div style={{width:avatarSize,height:avatarSize,borderRadius:'50%',background:`${color}35`,border:`1.5px solid ${color}60`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:avatarSize*.42,fontWeight:900,color,opacity:.9}}>{ini}</div>
-                  }
+                  <div style={{width:avatarSize,height:avatarSize,borderRadius:'50%',background:`${color}35`,border:`1.5px solid ${color}60`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:avatarSize*.42,fontWeight:900,color,opacity:.9}}>{ini}</div>
                 </div>
               }))}
               {game.hLines.map((row,r)=>row.map((val,c)=>{
                 const h=!val&&hov?.t==='h'&&hov.r===r&&hov.c===c,can=!val&&myTurn&&!done
                 const isBotNew=lastBotLine?.t==='h'&&lastBotLine.r===r&&lastBotLine.c===c
-                const bg=val?(bps[val-1]?.color??'#6366f1'):h?'rgba(99,102,241,.75)':'#c8ccd4'
+                const myColor=bps[game.turn]?.color??'#6366f1'
+                const bg=val?(bps[val-1]?.color??'#6366f1'):h?myColor:'#c8ccd4'
                 return <div key={`hl${r}${c}`} onMouseEnter={()=>can&&setHov({t:'h',r,c})} onMouseLeave={()=>setHov(null)} onClick={()=>can&&onLine('h',r,c)} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+LW,top:DOT/2+r*(CELL+LW)+(DOT-LW)/2-7,width:CELL,height:14+LW,cursor:can?'pointer':'default',zIndex:10,display:'flex',alignItems:'center'}}>
                   <div className="hl" style={{width:'100%',height:LW,borderRadius:LW,background:bg,
-                    boxShadow:isBotNew?`0 0 8px 3px ${oppColor}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
-                    transform:h?'scaleY(2.5)':'scaleY(1)',
+                    boxShadow:isBotNew?`0 0 8px 3px ${oppColor}`:h?`0 0 10px ${myColor}80`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
+                    transform:h?'scaleY(2.8)':'scaleY(1)',
                     animation:isBotNew?`botBlink 1.2s ease-in-out 1`:'none',
                     transition:'background .12s, transform .12s',
                   }}/>
@@ -411,11 +409,12 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
               {game.vLines.map((row,r)=>row.map((val,c)=>{
                 const h=!val&&hov?.t==='v'&&hov.r===r&&hov.c===c,can=!val&&myTurn&&!done
                 const isBotNew=lastBotLine?.t==='v'&&lastBotLine.r===r&&lastBotLine.c===c
-                const bg=val?(bps[val-1]?.color??'#6366f1'):h?'rgba(99,102,241,.75)':'#c8ccd4'
+                const myColorV=bps[game.turn]?.color??'#6366f1'
+                const bg=val?(bps[val-1]?.color??'#6366f1'):h?myColorV:'#c8ccd4'
                 return <div key={`vl${r}${c}`} onMouseEnter={()=>can&&setHov({t:'v',r,c})} onMouseLeave={()=>setHov(null)} onClick={()=>can&&onLine('v',r,c)} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+(DOT-LW)/2-7,top:DOT/2+r*(CELL+LW)+LW,width:14+LW,height:CELL,cursor:can?'pointer':'default',zIndex:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
                   <div className="hl" style={{width:LW,height:'100%',borderRadius:LW,background:bg,
-                    boxShadow:isBotNew?`0 0 8px 3px ${oppColor}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
-                    transform:h?'scaleX(2.5)':'scaleX(1)',
+                    boxShadow:isBotNew?`0 0 8px 3px ${oppColor}`:h?`0 0 10px ${myColorV}80`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
+                    transform:h?'scaleX(2.8)':'scaleX(1)',
                     animation:isBotNew?`botBlink 1.2s ease-in-out 1`:'none',
                     transition:'background .12s, transform .12s',
                   }}/>
@@ -585,20 +584,7 @@ function MatchSummary({game,bps,myIdx,onAgain,onBack,onShare,showConf,rPlayers}:
           <button onClick={onAgain} className="btn-press" style={{flex:2,height:48,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',borderRadius:14,cursor:'pointer',color:'white',fontSize:14,fontWeight:800,fontFamily:"'Outfit',sans-serif",boxShadow:'0 6px 20px rgba(99,102,241,.35)'}}>Play Again</button>
           <button onClick={onBack} className="btn-press" style={{flex:1,height:48,background:'white',border:'1.5px solid #e2e8f0',borderRadius:14,cursor:'pointer',color:'#64748b',fontSize:14,fontWeight:700,fontFamily:"'Outfit',sans-serif"}}>Back</button>
         </div>
-        {onShare&&(
-          <button onClick={onShare} className="btn-press" style={{width:'100%',height:40,background:'white',border:'1.5px solid #e8eaf6',borderRadius:12,cursor:'pointer',color:'#94a3b8',fontSize:12,fontWeight:700,fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:7}}>
-            <Share2 size={13}/> Share to Campus Talks
-          </button>
-        )}
-        {rPlayers&&rPlayers.length>1&&(
-          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-            {rPlayers.slice(1).map((p,i)=>(
-              <button key={i} className="btn-press" style={{flex:1,minWidth:100,height:36,background:'white',border:'1.5px solid #e2e8f0',borderRadius:11,cursor:'pointer',color:'#64748b',fontSize:11,fontWeight:700,fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
-                <UserPlus size={12}/> Add {p.firstName}
-              </button>
-            ))}
-          </div>
-        )}
+
       </div>
     </div>
   )
@@ -1175,36 +1161,48 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
   const pollRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const countdownRef=useRef<ReturnType<typeof setInterval>|null>(null)
+  const ablyChannelRef=useRef<any>(null)
   const ROOM_TTL=5*60*1000
 
   const saveRoom=(c:string,host:boolean,exp:number,t:number)=>{try{localStorage.setItem('cg_room',JSON.stringify({code:c,host,exp,total:t}))}catch{}}
   const clearRoom=()=>{try{localStorage.removeItem('cg_room')}catch{}}
-  const stopPoll=()=>{if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null}}
+  const stopPoll=()=>{
+    if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null}
+    if(ablyChannelRef.current){
+      try{ablyChannelRef.current.unsubscribe()}catch{}
+      ablyChannelRef.current=null
+    }
+  }
 
   const startPoll=useCallback((c:string)=>{
     stopPoll()
-    // ── Ably real-time subscription for instant chat + moves ──
+
+    // ── Ably: sole delivery mechanism for chat + moves ──
     try{
       const{getAblyClient}=require('@/lib/ably-client')
       const ably=getAblyClient(me.id)
       const ch=ably.channels.get(`game-room-${c}`)
+      ablyChannelRef.current=ch
+
+      // Chat — Ably is the only delivery path, no poll involved
       ch.subscribe('chat-message',(msg:any)=>{
         const m=msg.data as ChatMsg
         setChatMsgs(prev=>{
+          // Deduplicate by ts+from in case sender's own optimistic message is echoed back
           if(prev.find(x=>x.ts===m.ts&&x.from===m.from))return prev
           return [...prev,m]
         })
-        // Auto-open chat for everyone when a message arrives; just clear unread if already open
         if(!showChatRef.current){
           setShowChat(true);showChatRef.current=true;setUnreadChat(0)
         } else {
           setUnreadChat(0)
         }
       })
+
+      // Game moves — Ably for instant delivery
       ch.subscribe('move-made',(msg:any)=>{
         const{gameState,move,userId:mover}=msg.data
         if(mover===me.id)return
-        // Apply move instantly from Ably — use authoritative gameState from sender
         if(gameState){
           setGame(gameState)
           prevGameStateRef.current=gameState
@@ -1215,7 +1213,33 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
           opponentLineTimer.current=setTimeout(()=>setLastOpponentLine(null),1200)
         }
       })
-    }catch(e){console.warn('Ably subscription failed, falling back to poll',e)}
+
+      // Room presence — Ably for instant join notifications
+      ch.subscribe('player-joined',(msg:any)=>{
+        const{players}=msg.data
+        if(players)setRP(players)
+      })
+
+      // Game start — Ably triggers phase transition instantly
+      ch.subscribe('game-started',(msg:any)=>{
+        const{room,players,gridSize:gs}=msg.data
+        const activePlayers=players??room?.players??[]
+        const size=gs??room?.gridSize??9
+        if(activePlayers.length)setRP(activePlayers)
+        // Initialise fresh game state from gridSize since API doesn't send gameState on start
+        const freshGame=newGame(size,activePlayers.length||2)
+        setGame(freshGame)
+        prevGameStateRef.current=freshGame
+        setRoomExpiresAt(null)
+        if(countdownRef.current)clearInterval(countdownRef.current)
+        const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
+        if(idx>=0)setMyIdx(idx)
+        setPhase('play')
+      })
+    }catch(e){console.error('Ably init failed:',e)}
+
+    // ── Poll: room state only (player list + game start as safety net) ──
+    // Only reads players and status — never touches chat
     pollRef.current=setInterval(async()=>{
       try{
         const r=await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1223,23 +1247,12 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(!r.ok)return
         const d=await r.json(); const rm=d.room
         setRP(rm.players??[])
-        if(rm.chat){
-          setChatMsgs(prev=>{
-            const hadNew=rm.chat.length>prev.length
-            if(hadNew&&!showChatRef.current){
-              setShowChat(true);showChatRef.current=true;setUnreadChat(0)
-            } else if(hadNew&&showChatRef.current){
-              setUnreadChat(0)
-            }
-            return rm.chat
-          })
-        }
         if(rm.lastReaction&&rm.lastReaction.ts>Date.now()-1500){
           setReactId(p=>{const id=p;setReactions(prev=>[...prev,{id,emoji:rm.lastReaction.emoji,x:10+Math.random()*80}]);setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000);return p+1})
         }
+        // Game start safety net — only applies if Ably game-started event was missed
         if(rm.status==='playing'&&rm.gameState){
           const newGs=rm.gameState
-          // Count total moves in each state to avoid poll overwriting a newer local state
           const countMoves=(gs:GS)=>{
             let m=0
             for(let r=0;r<=gs.rows;r++)for(let c=0;c<gs.cols;c++)if(gs.hLines[r]?.[c])m++
@@ -1248,7 +1261,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
           }
           const serverMoves=countMoves(newGs)
           const localMoves=prevGameStateRef.current?countMoves(prevGameStateRef.current):0
-          // Only apply poll update if server has more moves than our local state (i.e. we missed something)
           if(serverMoves>localMoves){
             prevGameStateRef.current=newGs
             setGame(newGs);setPhase('play')
@@ -1358,13 +1370,14 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     const n=place(game,t,r,c);if(!n)return
     // Optimistic update — instant local render, no waiting for server
     setGame(n)
-    // Fire Ably publish immediately for real-time opponent update
-    try{
-      const{getAblyClient}=require('@/lib/ably-client')
-      const ably=getAblyClient(me.id)
-      ably.channels.get(`game-room-${code}`).publish('move-made',{gameState:n,move:{t,r,c},userId:me.id}).catch(()=>{})
-    }catch{}
-    // PATCH server in background — don't await, never blocks UI
+    // Publish move via stored channel ref — same connection as subscriber, instant delivery
+    const ch=ablyChannelRef.current
+    if(ch){
+      ch.publish('move-made',{gameState:n,move:{t,r,c},userId:me.id}).catch((e:any)=>{
+        console.error('Move publish failed:',e)
+      })
+    }
+    // PATCH server in background — persistence only, never blocks UI or move delivery
     fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({code,userId:me.id,move:{t,r,c},gameState:n})}).catch(()=>{})
     if(n.done){
@@ -1391,16 +1404,15 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     const myColor=rPlayers.find(p=>p.userId===me.id)?.color??PRESET_COLORS[0]
     const myPlayer=rPlayers.find(p=>p.userId===me.id)
     const msg:ChatMsg={from:me.firstName,text:chatInput.trim(),color:myColor,ts:Date.now(),profileImage:myPlayer?.profileImage??me.profileImage??null}
+    // Optimistic update for sender only
     setChatMsgs(p=>[...p,msg]);setChatInput('')
-    // Auto-open chat for sender too
     if(!showChatRef.current){setShowChat(true);showChatRef.current=true;setUnreadChat(0)}
+    // Single source of truth: API saves to DB and publishes to Ably channel
+    // All other players receive via their Ably subscription
     try{
-      const{getAblyClient}=require('@/lib/ably-client')
-      const ably=getAblyClient(me.id)
-      ably.channels.get(`game-room-${code}`).publish('chat-message',msg).catch(()=>{})
       await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({code,userId:me.id,chat:msg})})
-    }catch{}
+    }catch(e){console.error('Chat send failed:',e)}
   }
 
   const resetBack=()=>{
@@ -1550,6 +1562,10 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
         {showDMPanel&&<DMSharePanel me={me} code={code} inviteLink={inviteLink} onClose={()=>setShowDMPanel(false)}/>}
         {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
+        <button onClick={()=>{const next=!showChat;setShowChat(next);setUnreadChat(0);showChatRef.current=next}} style={{position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 6px 24px rgba(99,102,241,.45)',zIndex:150,transition:'transform .2s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
+          <span style={{fontSize:22}}>💬</span>
+          {unreadChat>0&&<div style={{position:'absolute',top:0,right:0,width:18,height:18,borderRadius:'50%',background:'#ef4444',border:'2px solid white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'white'}}>{unreadChat>9?'9+':unreadChat}</div>}
+        </button>
 
         <div style={{flexShrink:0,background:'rgba(255,255,255,.9)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(232,234,246,.8)',padding:'14px 22px',display:'flex',alignItems:'center',gap:12,position:'relative',zIndex:2}}>
           <button onClick={resetBack} style={{width:38,height:38,borderRadius:12,background:'white',border:'1.5px solid #e8eaf6',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
@@ -1567,11 +1583,8 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
             <div style={{background:'white',borderRadius:20,border:'1.5px solid #e0e7ff',padding:'20px 22px',boxShadow:'0 4px 20px rgba(99,102,241,.08)',animation:'waitUp .4s ease both'}}>
               <div style={{fontSize:10,fontWeight:800,color:'#94a3b8',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:12}}>Room Code — Share with friends</div>
-              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-                <span style={{fontSize:42,fontWeight:900,color:'#3730a3',letterSpacing:'.18em',fontFamily:"'Outfit',sans-serif",flex:1,lineHeight:1}}>{code}</span>
-                <button onClick={()=>copyVal(code,'code')} style={{height:38,borderRadius:10,background:copied==='code'?'#10b981':'#eef2ff',border:`1.5px solid ${copied==='code'?'#10b981':'#c7d2fe'}`,color:copied==='code'?'white':'#6366f1',padding:'0 14px',cursor:'pointer',display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:700,whiteSpace:'nowrap',transition:'all .2s',fontFamily:"'Outfit',sans-serif"}}>
-                  {copied==='code'?'✓ Copied!':'Copy Code'}
-                </button>
+              <div style={{marginBottom:16}}>
+                <span style={{fontSize:42,fontWeight:900,color:'#3730a3',letterSpacing:'.18em',fontFamily:"'Outfit',sans-serif",lineHeight:1}}>{code}</span>
               </div>
               <div style={{display:'flex',gap:8}}>
                 <button onClick={()=>setShowDMPanel(true)} style={{flex:1,height:40,borderRadius:10,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',color:'white',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 14px rgba(99,102,241,.3)',fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
