@@ -255,12 +255,13 @@ function SizePick({title,sub,onBack,onGo}:{title:string;sub:string;onBack:()=>vo
 interface BP{label:string;ini:string;color:string;avatar?:string|null;major?:string|null}
 interface ScorePop{id:number;x:number;y:number;color:string}
 
-function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onReact,chatMsgs,chatInput,setChatInput,sendChat,isMulti,lastBotLine}:{
+function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onReact,chatMsgs,chatInput,setChatInput,sendChat,isMulti,lastBotLine,opponentIdx}:{
   game:GS;bps:BP[];myTurn:boolean;onLine:(t:'h'|'v',r:number,c:number)=>void;onBack:()=>void;
   status:string;stColor:string;done:boolean;reactions?:FloatReaction[];onReact?:(e:string)=>void;
   chatMsgs?:ChatMsg[];chatInput?:string;setChatInput?:(v:string)=>void;sendChat?:()=>void;isMulti?:boolean;
-  lastBotLine?:{t:'h'|'v';r:number;c:number}|null;
+  lastBotLine?:{t:'h'|'v';r:number;c:number}|null;opponentIdx?:number;
 }){
+  const oppColor=bps[opponentIdx??1]?.color??'#f59e0b'
   const[hov,setHov]=useState<{t:'h'|'v';r:number;c:number}|null>(null)
   const[anim,setAnim]=useState<Set<string>>(new Set())
   const[scorePops,setScorePops]=useState<ScorePop[]>([])
@@ -400,7 +401,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
                 const bg=val?(bps[val-1]?.color??'#6366f1'):h?'rgba(99,102,241,.75)':'#c8ccd4'
                 return <div key={`hl${r}${c}`} onMouseEnter={()=>can&&setHov({t:'h',r,c})} onMouseLeave={()=>setHov(null)} onClick={()=>can&&onLine('h',r,c)} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+LW,top:DOT/2+r*(CELL+LW)+(DOT-LW)/2-7,width:CELL,height:14+LW,cursor:can?'pointer':'default',zIndex:10,display:'flex',alignItems:'center'}}>
                   <div className="hl" style={{width:'100%',height:LW,borderRadius:LW,background:bg,
-                    boxShadow:isBotNew?`0 0 8px 3px ${bps[1]?.color??'#f59e0b'}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
+                    boxShadow:isBotNew?`0 0 8px 3px ${oppColor}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
                     transform:h?'scaleY(2.5)':'scaleY(1)',
                     animation:isBotNew?`botBlink 1.2s ease-in-out 1`:'none',
                     transition:'background .12s, transform .12s',
@@ -413,7 +414,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
                 const bg=val?(bps[val-1]?.color??'#6366f1'):h?'rgba(99,102,241,.75)':'#c8ccd4'
                 return <div key={`vl${r}${c}`} onMouseEnter={()=>can&&setHov({t:'v',r,c})} onMouseLeave={()=>setHov(null)} onClick={()=>can&&onLine('v',r,c)} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+(DOT-LW)/2-7,top:DOT/2+r*(CELL+LW)+LW,width:14+LW,height:CELL,cursor:can?'pointer':'default',zIndex:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
                   <div className="hl" style={{width:LW,height:'100%',borderRadius:LW,background:bg,
-                    boxShadow:isBotNew?`0 0 8px 3px ${bps[1]?.color??'#f59e0b'}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
+                    boxShadow:isBotNew?`0 0 8px 3px ${oppColor}`:val?`0 0 10px ${bps[val-1]?.color??'#6366f1'}60`:'none',
                     transform:h?'scaleX(2.5)':'scaleX(1)',
                     animation:isBotNew?`botBlink 1.2s ease-in-out 1`:'none',
                     transition:'background .12s, transform .12s',
@@ -1203,7 +1204,11 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
       ch.subscribe('move-made',(msg:any)=>{
         const{gameState,move,userId:mover}=msg.data
         if(mover===me.id)return
-        if(gameState)setGame(gameState)
+        // Apply move instantly from Ably — use authoritative gameState from sender
+        if(gameState){
+          setGame(gameState)
+          prevGameStateRef.current=gameState
+        }
         if(move){
           if(opponentLineTimer.current)clearTimeout(opponentLineTimer.current)
           setLastOpponentLine(move)
@@ -1219,42 +1224,40 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         const d=await r.json(); const rm=d.room
         setRP(rm.players??[])
         if(rm.chat){
-          setChatMsgs(rm.chat)
-          setUnreadChat(prev=>showChatRef.current?0:rm.chat.length>0?rm.chat.length-(prev):prev)
+          setChatMsgs(prev=>{
+            const hadNew=rm.chat.length>prev.length
+            if(hadNew&&!showChatRef.current){
+              setShowChat(true);showChatRef.current=true;setUnreadChat(0)
+            } else if(hadNew&&showChatRef.current){
+              setUnreadChat(0)
+            }
+            return rm.chat
+          })
         }
         if(rm.lastReaction&&rm.lastReaction.ts>Date.now()-1500){
           setReactId(p=>{const id=p;setReactions(prev=>[...prev,{id,emoji:rm.lastReaction.emoji,x:10+Math.random()*80}]);setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000);return p+1})
         }
         if(rm.status==='playing'&&rm.gameState){
           const newGs=rm.gameState
-          if(prevGameStateRef.current&&newGs&&phase==='play'){
-            const prev=prevGameStateRef.current
-            let foundLine:{t:'h'|'v';r:number;c:number}|null=null
-            outer: for(let r=0;r<=newGs.rows;r++)for(let c=0;c<newGs.cols;c++){
-              if((newGs.hLines[r]?.[c]??0)&&!(prev.hLines[r]?.[c]??0)){foundLine={t:'h',r,c};break outer}
-            }
-            if(!foundLine){
-              outer2: for(let r=0;r<newGs.rows;r++)for(let c=0;c<=newGs.cols;c++){
-                if((newGs.vLines[r]?.[c]??0)&&!(prev.vLines[r]?.[c]??0)){foundLine={t:'v',r,c};break outer2}
-              }
-            }
-            if(foundLine){
-              const lineOwner=foundLine.t==='h'?newGs.hLines[foundLine.r]?.[foundLine.c]:newGs.vLines[foundLine.r]?.[foundLine.c]
-              const myPlayerIdx=rm.players.findIndex((p:RoomPlayer)=>p.userId===me.id)
-              if(lineOwner&&lineOwner-1!==myPlayerIdx){
-                if(opponentLineTimer.current)clearTimeout(opponentLineTimer.current)
-                setLastOpponentLine(foundLine)
-                opponentLineTimer.current=setTimeout(()=>setLastOpponentLine(null),1200)
-              }
-            }
+          // Count total moves in each state to avoid poll overwriting a newer local state
+          const countMoves=(gs:GS)=>{
+            let m=0
+            for(let r=0;r<=gs.rows;r++)for(let c=0;c<gs.cols;c++)if(gs.hLines[r]?.[c])m++
+            for(let r=0;r<gs.rows;r++)for(let c=0;c<=gs.cols;c++)if(gs.vLines[r]?.[c])m++
+            return m
           }
-          prevGameStateRef.current=newGs
-          setGame(newGs);setPhase('play')
+          const serverMoves=countMoves(newGs)
+          const localMoves=prevGameStateRef.current?countMoves(prevGameStateRef.current):0
+          // Only apply poll update if server has more moves than our local state (i.e. we missed something)
+          if(serverMoves>localMoves){
+            prevGameStateRef.current=newGs
+            setGame(newGs);setPhase('play')
+          }
           const idx=rm.players.findIndex((p:RoomPlayer)=>p.userId===me.id)
-          setMyIdx(idx>=0?idx:0)
+          if(idx>=0)setMyIdx(idx)
         }
       }catch{}
-    },2500)
+    },3000)
   },[me.id])
 
   useEffect(()=>()=>{stopPoll();if(countdownRef.current)clearInterval(countdownRef.current)},[])
@@ -1265,7 +1268,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     countdownRef.current=setInterval(()=>{
       const s=Math.max(0,Math.floor((roomExpiresAt-Date.now())/1000))
       setSecondsLeft(s)
-      if(s===0){clearInterval(countdownRef.current!);stopPoll();clearRoom();setCode('');setRP([]);setPhase('setup')}
+      if(s===0){clearInterval(countdownRef.current!);clearRoom();setPhase(prev=>{if(prev==='waiting'){stopPoll();setCode('');setRP([]);return 'setup'}return prev})}
     },1000)
     return()=>{if(countdownRef.current)clearInterval(countdownRef.current)}
   },[roomExpiresAt])
@@ -1345,15 +1348,25 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
       await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({code,userId:me.id,gameState:g})})
       setGame(g);setMyIdx(0);setConf(false);setPhase('play')
+      // Clear expiry — room lives until game ends or players leave
+      setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
     }catch{}
   }
 
   const onLine=async(t:'h'|'v',r:number,c:number)=>{
     if(!game||game.done||(game.turn-1)!==myIdx)return
     const n=place(game,t,r,c);if(!n)return
+    // Optimistic update — instant local render, no waiting for server
     setGame(n)
-    try{await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code,userId:me.id,move:{t,r,c},gameState:n})})}catch{}
+    // Fire Ably publish immediately for real-time opponent update
+    try{
+      const{getAblyClient}=require('@/lib/ably-client')
+      const ably=getAblyClient(me.id)
+      ably.channels.get(`game-room-${code}`).publish('move-made',{gameState:n,move:{t,r,c},userId:me.id}).catch(()=>{})
+    }catch{}
+    // PATCH server in background — don't await, never blocks UI
+    fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code,userId:me.id,move:{t,r,c},gameState:n})}).catch(()=>{})
     if(n.done){
       const mx=Math.max(...n.scores)
       const won=n.scores[myIdx]===mx&&n.scores.filter(s=>s===mx).length===1
@@ -1379,6 +1392,8 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     const myPlayer=rPlayers.find(p=>p.userId===me.id)
     const msg:ChatMsg={from:me.firstName,text:chatInput.trim(),color:myColor,ts:Date.now(),profileImage:myPlayer?.profileImage??me.profileImage??null}
     setChatMsgs(p=>[...p,msg]);setChatInput('')
+    // Auto-open chat for sender too
+    if(!showChatRef.current){setShowChat(true);showChatRef.current=true;setUnreadChat(0)}
     try{
       const{getAblyClient}=require('@/lib/ably-client')
       const ably=getAblyClient(me.id)
@@ -1559,21 +1574,13 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
                 </button>
               </div>
               <div style={{display:'flex',gap:8}}>
-                <button onClick={()=>copyVal(inviteLink,'link')} style={{flex:1,height:40,borderRadius:10,background:copied==='link'?'#10b981':'#f8fafc',border:`1.5px solid ${copied==='link'?'#10b981':'#e2e8f0'}`,color:copied==='link'?'white':'#374151',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,transition:'all .2s',fontFamily:"'Outfit',sans-serif"}}>
-                  {copied==='link'?'✓ Copied!':'🔗 Copy Link'}
-                </button>
                 <button onClick={()=>setShowDMPanel(true)} style={{flex:1,height:40,borderRadius:10,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',color:'white',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 14px rgba(99,102,241,.3)',fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
                   💬 Share via DM
                 </button>
+                <button onClick={()=>{setShowChat(true);showChatRef.current=true;setUnreadChat(0)}} style={{flex:1,height:40,borderRadius:10,background:'#eef2ff',border:'1.5px solid #c7d2fe',color:'#6366f1',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
+                  💬 Chat
+                </button>
               </div>
-            </div>
-
-            <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:14,padding:'10px 16px',display:'flex',alignItems:'center',gap:10,animation:'waitUp .4s .06s ease both',animationFillMode:'forwards'}}>
-              <span style={{fontSize:16}}>💡</span>
-              <span style={{fontSize:12,color:'#92400e',fontWeight:600,flex:1}}>Room stays open — you can leave and come back!</span>
-              <button onClick={()=>{setShowChat(true);showChatRef.current=true;setUnreadChat(0)}} style={{background:'#6366f1',border:'none',borderRadius:9,padding:'6px 13px',color:'white',cursor:'pointer',fontSize:11,fontWeight:800,whiteSpace:'nowrap',fontFamily:"'Outfit',sans-serif",display:'flex',alignItems:'center',gap:5}}>
-                💬 Chat
-              </button>
             </div>
 
             <div style={{background:'white',borderRadius:20,border:'1.5px solid #f0f0f7',padding:'16px 18px',boxShadow:'0 4px 20px rgba(0,0,0,.05)',animation:'waitUp .4s .12s ease both',animationFillMode:'forwards'}}>
@@ -1674,7 +1681,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     )
     return(
       <div style={{height:'100%',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-        <Board game={game} bps={bpsCurrent} myTurn={myTurn} onLine={onLine} onBack={resetBack}
+        <Board game={game} bps={bpsCurrent} myTurn={myTurn} onLine={onLine} onBack={resetBack} opponentIdx={myIdx===0?1:0}
           status={st} stColor={sc} done={false} reactions={reactions}
           onReact={handleReact} chatMsgs={chatMsgs} chatInput={chatInput}
           setChatInput={setChatInput} sendChat={sendChat} isMulti={false}

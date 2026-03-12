@@ -32,28 +32,13 @@ function NavItem({ icon, label, active, onClick, locked }: {
     <button
       onClick={locked ? undefined : onClick}
       disabled={locked}
-      style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '9px 12px',
-        borderRadius: 10,
-        border: 'none',
-        cursor: locked ? 'not-allowed' : 'pointer',
-        background: active ? '#eef2ff' : 'transparent',
-        color: locked ? '#d1d5db' : active ? '#4f46e5' : '#6b7280',
-        fontSize: 13,
-        fontWeight: active ? 600 : 500,
-        textAlign: 'left',
-        transition: 'all 0.15s',
-        minHeight: 40,
-      }}
-      onMouseEnter={e => { if (!locked && !active) { e.currentTarget.style.background = '#f9fafb'; e.currentTarget.style.color = '#111827' } }}
-      onMouseLeave={e => { if (!locked && !active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6b7280' } }}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium ${
+        active ? 'bg-indigo-50 text-indigo-600' : locked ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+      }`}
+      style={{ border: 'none', textAlign: 'left', fontWeight: active ? 600 : 500 }}
     >
-      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, flexShrink: 0 }}>{icon}</span>
-      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+      <span className="flex items-center justify-center w-[18px] h-[18px] flex-shrink-0">{icon}</span>
+      <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
       {locked && <Lock style={{ width: 12, height: 12, flexShrink: 0 }} />}
     </button>
   )
@@ -124,7 +109,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
           SIDEBAR
       ═══════════════════════════════════════ */}
       <aside style={{
-        width: 240,
+        width: 220,
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
@@ -133,15 +118,15 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
         height: '100vh',
       }}>
 
-        {/* Logo */}
-        <div style={{ padding: '20px 16px 16px' }}>
+        {/* Logo — matches Chat page px-5 py-5 */}
+        <div style={{ padding: '20px 20px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
-              width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+              width: 36, height: 36, borderRadius: 10, flexShrink: 0,
               background: 'linear-gradient(135deg, #4f46e5, #7c3aed)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-              <span style={{ color: 'white', fontWeight: 800, fontSize: 13, letterSpacing: '-0.02em' }}>CA</span>
+              <span style={{ color: 'white', fontWeight: 800, fontSize: 12, letterSpacing: '-0.02em' }}>CA</span>
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', letterSpacing: '-0.02em', lineHeight: 1.2 }}>Campus Arena</div>
@@ -155,26 +140,26 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#f3f4f6', margin: '0 16px 12px' }} />
+        <div style={{ height: 1, background: '#f3f4f6', margin: '0 16px 8px' }} />
 
-        {/* Nav items */}
-        <nav style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+        {/* Nav items — matches Chat page px-3 space-y-1 */}
+        <nav style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           <NavItem
-            icon={<MessageSquare style={{ width: 17, height: 17 }} />}
+            icon={<MessageSquare style={{ width: 18, height: 18 }} />}
             label="Chat"
             active={isChat && !isOnboarding}
             onClick={() => router.push('/home')}
             locked={isOnboarding}
           />
           <NavItem
-            icon={<Megaphone style={{ width: 17, height: 17 }} />}
+            icon={<Megaphone style={{ width: 18, height: 18 }} />}
             label="Campus Talks"
             active={isCampusTalks && !isOnboarding}
             onClick={() => router.push('/home/campus-talks')}
             locked={isOnboarding}
           />
           <NavItem
-            icon={<Gamepad2 style={{ width: 17, height: 17 }} />}
+            icon={<Gamepad2 style={{ width: 18, height: 18 }} />}
             label="Campus Games"
             active={isGames && !isOnboarding}
             onClick={() => router.push('/home/campus-games')}
@@ -189,20 +174,14 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
           </div>
         )}
 
-        {/* Logout only — no user card */}
-        <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 8px' }}>
+        {/* Logout — matches Chat page px-3 py-4 text-sm */}
+        <div style={{ borderTop: '1px solid #e5e7eb', padding: '12px 12px' }}>
           <button
             onClick={() => setShowLogoutModal(true)}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-              padding: '8px 10px', borderRadius: 10, border: 'none',
-              background: 'none', cursor: 'pointer', color: '#9ca3af',
-              fontSize: 13, fontWeight: 500,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#9ca3af' }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all text-sm font-medium"
+            style={{ border: 'none', background: 'none', cursor: 'pointer' }}
           >
-            <LogOut style={{ width: 16, height: 16, flexShrink: 0 }} />
+            <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
             <span>Log out</span>
           </button>
         </div>
