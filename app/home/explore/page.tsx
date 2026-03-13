@@ -15,22 +15,18 @@ interface Classmate {
   academicStanding?: string
 }
 
-// Simple, clean academic standing label
+// Single standard color for all academic standings
 function StandingBadge({ standing }: { standing: string }) {
   const s = standing.toLowerCase()
-  const colorMap: Record<string, string> = {
-    freshman: '#0ea5e9', sophomore: '#10b981', junior: '#8b5cf6',
-    senior: '#f59e0b', alumni: '#ec4899', graduate: '#ef4444',
-  }
-  const key = Object.keys(colorMap).find(k => s.includes(k))
-  const color = key ? colorMap[key] : '#94a3b8'
+  const key = ['freshman', 'sophomore', 'junior', 'senior', 'alumni', 'graduate'].find(k => s.includes(k))
   const label = key ? key.charAt(0).toUpperCase() + key.slice(1) : standing
   return (
-    <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: '0.03em', textTransform: 'uppercase' as const, opacity: 0.85 }}>
+    <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', letterSpacing: '0.03em', textTransform: 'uppercase' as const, opacity: 0.85 }}>
       {label}
     </span>
   )
 }
+
 function UserAvatar({ src, firstName, lastName, size = 60, className = '' }: {
   src?: string | null; firstName?: string; lastName?: string; size?: number; className?: string
 }) {
@@ -166,7 +162,7 @@ export default function ExploreClassmatesPage() {
           Showing <span className="font-bold text-gray-900">{classmates.length}</span> students
         </p>
 
-        {/* Cards — 4 columns on large screens */}
+        {/* Cards */}
         {isLoading ? (
           <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-indigo-400 animate-spin" /></div>
         ) : classmates.length > 0 ? (

@@ -223,10 +223,10 @@ export default function ProfilePage() {
     if (editForm.degree === 'Other' && !editForm.customDegree.trim()) errs.customDegree = 'Enter your degree'
     if (!editForm.major) errs.major = 'Required'
     if (editForm.major === 'Other' && !editForm.customMajor.trim()) errs.customMajor = 'Enter your major'
-    if (!editForm.year) errs.year = 'Required'
-    if (!editForm.semester) errs.semester = 'Required'
     if ((editForm.degree === 'Undergraduate' || editForm.degree === 'Graduate') && !editForm.academicStanding) errs.academicStanding = 'Required'
     if (selectedInterests.length < 2) errs.interests = 'Select at least 2 interests'
+    // ── Profile photo required during onboarding ──
+    if (onboardingMode && !user.profileImage) errs.profileImage = 'Please add a profile photo'
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
     setIsSaving(true); setSaveSuccess(false)
@@ -237,8 +237,8 @@ export default function ProfilePage() {
       const body = onboardingMode ? {
         userId: user.id, firstName: editForm.firstName, lastName: editForm.lastName,
         degree: editForm.degree === 'Other' ? editForm.customDegree : editForm.degree,
-        customDegree: editForm.customDegree, major: resolvedMajor, minor: editForm.minor,
-        year: editForm.year, semester: editForm.semester, academicStanding: editForm.academicStanding,
+        customDegree: editForm.customDegree, major: resolvedMajor,
+        academicStanding: editForm.academicStanding,
         bio: editForm.bio, hometown: editForm.hometown, interests: selectedInterests,
       } : {
         userId: user.id, firstName: editForm.firstName, lastName: editForm.lastName,
@@ -296,6 +296,8 @@ export default function ProfilePage() {
               const stored = JSON.parse(localStorage.getItem('user') || '{}')
               localStorage.setItem('user', JSON.stringify({ ...stored, profileImage: data.user.profileImage }))
               window.dispatchEvent(new Event('userUpdated'))
+              // Clear profileImage error once uploaded successfully
+              setErrors(prev => ({ ...prev, profileImage: '' }))
             } else { setImageUploadError('Upload failed. Please try again.') }
             return
           } catch {
@@ -312,6 +314,8 @@ export default function ProfilePage() {
         const stored = JSON.parse(localStorage.getItem('user') || '{}')
         localStorage.setItem('user', JSON.stringify({ ...stored, profileImage: data.user.profileImage }))
         window.dispatchEvent(new Event('userUpdated'))
+        // Clear profileImage error once uploaded successfully
+        setErrors(prev => ({ ...prev, profileImage: '' }))
       } else {
         const data = await res.json().catch(() => ({}))
         setImageUploadError(data.error || 'Upload failed. Please try again.')
@@ -345,7 +349,7 @@ export default function ProfilePage() {
   )
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto min-h-0 h-full">
       {/* ✅ Responsive padding: tight on mobile, generous on desktop */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 sm:py-6">
 
@@ -358,7 +362,7 @@ export default function ProfilePage() {
 
         {/* ONBOARDING BANNER */}
         {onboardingMode && (
-          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-4 sm:p-6 mb-5 text-white">
+          <div className={`bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl p-4 sm:p-6 mb-5 text-white ${errors.profileImage ? 'ring-2 ring-red-400' : ''}`}>
             {/* ✅ Stack vertically on mobile, side-by-side on sm+ */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
               {/* Avatar — centered on mobile, right-aligned on desktop */}
@@ -373,9 +377,19 @@ export default function ProfilePage() {
                   </button>
                   <input ref={onboardingFileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                 </div>
-                <p className="text-[11px] text-indigo-200 text-center mt-1.5">
-                  {isUploadingImage ? 'Uploading...' : 'Add photo'}
+                <p className="text-[11px] text-center mt-1.5">
+                  {isUploadingImage
+                    ? <span className="text-indigo-200">Uploading...</span>
+                    : user?.profileImage
+                      ? <span className="text-green-300">✓ Photo added</span>
+                      : <span className="text-red-300 font-semibold">Required *</span>
+                  }
                 </p>
+                {errors.profileImage && (
+                  <p className="text-[10px] text-red-300 text-center mt-0.5 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 flex-shrink-0" />{errors.profileImage}
+                  </p>
+                )}
               </div>
               <div className="flex-1 min-w-0 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-2 mb-1.5">
@@ -550,32 +564,18 @@ export default function ProfilePage() {
               </div>
             )}
 
-            <div className="mb-5">
-              <FormField label="Minor" optional>
-                <input type="text" value={editForm.minor} onChange={(e) => updateField('minor', e.target.value)}
-                  placeholder="e.g., Statistics" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
-              </FormField>
-            </div>
+            {!onboardingMode && (
+              <div className="mb-5">
+                <FormField label="Minor" optional>
+                  <input type="text" value={editForm.minor} onChange={(e) => updateField('minor', e.target.value)}
+                    placeholder="e.g., Statistics" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
+                </FormField>
+              </div>
+            )}
 
-            {/* ✅ 3-col grid → 1-col on mobile, 3-col on sm+ */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-              <FormField label="Enrollment Semester" required error={errors.semester}>
-                <select value={editForm.semester} onChange={(e) => updateField('semester', e.target.value)}
-                  className={inputClass(errors.semester) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
-                  <option value="">Select</option>
-                  <option value="Fall">Fall</option>
-                  <option value="Spring">Spring</option>
-                  <option value="Summer">Summer</option>
-                </select>
-              </FormField>
-              <FormField label="Enrollment Year" required error={errors.year}>
-                <select value={editForm.year} onChange={(e) => updateField('year', e.target.value)}
-                  className={inputClass(errors.year) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
-                  <option value="">Select</option>
-                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </FormField>
-              {(editForm.degree === 'Undergraduate' || editForm.degree === 'Graduate') && (
+            {/* Onboarding: Academic Standing + Hometown side by side, always visible */}
+            {onboardingMode ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
                 <FormField label="Academic Standing" required error={errors.academicStanding}>
                   <select value={editForm.academicStanding} onChange={(e) => updateField('academicStanding', e.target.value)}
                     className={inputClass(errors.academicStanding) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
@@ -583,15 +583,49 @@ export default function ProfilePage() {
                     {standingOptions.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </FormField>
-              )}
-            </div>
-
-            <div className="mb-5">
-              <FormField label="Hometown" optional>
-                <input type="text" value={editForm.hometown} onChange={(e) => updateField('hometown', e.target.value)}
-                  placeholder="City, Country" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
-              </FormField>
-            </div>
+                <FormField label="Hometown" optional>
+                  <input type="text" value={editForm.hometown} onChange={(e) => updateField('hometown', e.target.value)}
+                    placeholder="City, Country" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
+                </FormField>
+              </div>
+            ) : (
+              <>
+                {/* Edit mode: 3-col grid, semester + year optional, standing conditional */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+                  <FormField label="Enrollment Semester" error={errors.semester}>
+                    <select value={editForm.semester} onChange={(e) => updateField('semester', e.target.value)}
+                      className={inputClass(errors.semester) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
+                      <option value="">Select</option>
+                      <option value="Fall">Fall</option>
+                      <option value="Spring">Spring</option>
+                      <option value="Summer">Summer</option>
+                    </select>
+                  </FormField>
+                  <FormField label="Enrollment Year" error={errors.year}>
+                    <select value={editForm.year} onChange={(e) => updateField('year', e.target.value)}
+                      className={inputClass(errors.year) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
+                      <option value="">Select</option>
+                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </FormField>
+                  {(editForm.degree === 'Undergraduate' || editForm.degree === 'Graduate') && (
+                    <FormField label="Academic Standing" required error={errors.academicStanding}>
+                      <select value={editForm.academicStanding} onChange={(e) => updateField('academicStanding', e.target.value)}
+                        className={inputClass(errors.academicStanding) + ' bg-white'} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }}>
+                        <option value="">Select</option>
+                        {standingOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </FormField>
+                  )}
+                </div>
+                <div className="mb-5">
+                  <FormField label="Hometown" optional>
+                    <input type="text" value={editForm.hometown} onChange={(e) => updateField('hometown', e.target.value)}
+                      placeholder="City, Country" className={inputClass()} style={{ fontSize: 16, colorScheme: 'light', color: '#111827', backgroundColor: 'white' }} />
+                  </FormField>
+                </div>
+              </>
+            )}
 
             <div className="mb-6">
               <FormField label="Bio" optional>
@@ -652,10 +686,6 @@ function FormField({ label, required, optional, error, children }: {
 }
 
 function inputClass(error?: string) {
-  // ✅ Explicit bg-white + text-gray-900 + color-scheme:light prevents browser dark mode
-  // from making text invisible (white text on white bg or dark bg with dark text).
-  // This must be hardcoded via style — Tailwind classes alone can be overridden by
-  // the user's OS/browser theme if the browser injects its own color scheme.
   return `w-full px-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-1 transition-all text-gray-900 bg-white ${
     error ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-indigo-500'
   }`

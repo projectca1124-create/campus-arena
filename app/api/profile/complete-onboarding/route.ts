@@ -6,12 +6,12 @@ const prisma = new PrismaClient()
 export async function POST(request: Request) {
   try {
     const {
-      userId, firstName, lastName, degree, customDegree, major, minor,
-      year, semester, academicStanding, bio, hometown, interests,
+      userId, firstName, lastName, degree, customDegree, major,
+      academicStanding, bio, hometown, interests,
     } = await request.json()
 
     // Validation
-    if (!userId || !firstName || !lastName || !degree || !major || !year || !semester) {
+    if (!userId || !firstName || !lastName || !degree || !major) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     const finalDegree = degree === 'Other' && customDegree ? customDegree : degree
 
-    // Update user profile
+    // Update user profile — minor, year, semester intentionally omitted during onboarding
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -29,9 +29,6 @@ export async function POST(request: Request) {
         lastName,
         degree: finalDegree,
         major,
-        minor: minor || null,
-        year,
-        semester,
         academicStanding: academicStanding || null,
         bio: bio || null,
         hometown: hometown || null,
@@ -77,8 +74,7 @@ export async function POST(request: Request) {
     })
 
     // 2. Major group — full major name, one group per major per university
-    // e.g. "Computer Science", "Biology", "Applied Statistics and Data Science"
-    const groupName = major.trim()  // ← Full major name, no abbreviation
+    const groupName = major.trim()
     const groupIdentifier = `major-${major.trim().toLowerCase().replace(/\s+/g, '-')}-${university.toLowerCase().replace(/\s+/g, '-')}`
 
     let majorGroup = await prisma.group.findFirst({

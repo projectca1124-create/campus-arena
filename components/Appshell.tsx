@@ -229,7 +229,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
           </div>
         )}
 
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {children}
         </div>
       </div>
