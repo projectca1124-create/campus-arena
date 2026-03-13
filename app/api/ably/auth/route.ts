@@ -38,13 +38,13 @@ export async function POST(request: Request) {
 
     const tokenRequest = await ably.auth.createTokenRequest({
       clientId: userId,
-      ttl: 24 * 60 * 60 * 1000,
+      ttl: 60 * 60 * 1000, // 1 hour — shorter so capability changes take effect faster
       capability: {
         [`user-${userId}`]: ['subscribe', 'publish'],
         'group-*': ['subscribe', 'publish'],
         'dm-*': ['subscribe', 'publish'],
         'presence-updates': ['subscribe', 'publish'],
-        'game-room-*': ['subscribe', 'publish'],  // ← game channels
+        'game-room-*': ['subscribe', 'publish'],
       },
     })
 

@@ -1186,6 +1186,8 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
       authUrl:'/api/ably/auth',
       authMethod:'POST',
       authParams:{userId:me.id},
+      authHeaders:{'x-user-id':me.id},
+      queryTime:true,
     })
     ablyInstanceRef.current=ably
 
