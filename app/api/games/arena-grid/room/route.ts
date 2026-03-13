@@ -152,11 +152,8 @@ export async function PATCH(request: Request) {
     // Moves are published directly by the client via Ably for zero-latency delivery
     // Server only persists gameState to DB — no re-publishing here
 
-    // Publish chat via Ably — this is the ONLY place chat is published to Ably
-    // Client never publishes directly; all chat goes through here
-    if (chat) {
-      await publishEvent(`game-room-${code}`, 'chat-message', chat).catch(() => {})
-    }
+    // Chat is published directly by the client via ablyChannelRef for instant peer-to-peer delivery
+    // Server only persists chat to DB — no re-publishing to avoid double delivery
 
     return Response.json({ success: true })
   } catch (error) {

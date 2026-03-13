@@ -40,11 +40,11 @@ export async function POST(request: Request) {
       clientId: userId,
       ttl: 24 * 60 * 60 * 1000,
       capability: {
-        // ✅ FIXED: added 'publish' — without it notifications can't be sent
         [`user-${userId}`]: ['subscribe', 'publish'],
         'group-*': ['subscribe', 'publish'],
         'dm-*': ['subscribe', 'publish'],
         'presence-updates': ['subscribe', 'publish'],
+        'game-room-*': ['subscribe', 'publish'],  // ← game channels
       },
     })
 
