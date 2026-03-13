@@ -1225,14 +1225,14 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(players)setRP(players)
       })
 
-      // Game start
+      // Game start — receives full gameState from host directly via Ably
       ch.subscribe('game-started',(msg:any)=>{
-        const{room,players,gridSize:gs}=msg.data
+        const{gameState,players,gridSize:gs,room}=msg.data
         const activePlayers=players??room?.players??[]
-        const size=gs??room?.gridSize??9
         if(activePlayers.length)setRP(activePlayers)
-        const freshGame=newGame(size,activePlayers.length||2)
-        setGame(freshGame);prevGameStateRef.current=freshGame
+        // Use gameState sent by host directly — no need to reconstruct
+        const g=gameState??newGame(gs??room?.gridSize??9,activePlayers.length||2)
+        setGame(g);prevGameStateRef.current=g
         setRoomExpiresAt(null)
         if(countdownRef.current)clearInterval(countdownRef.current)
         const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
@@ -1359,16 +1359,21 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
   const launchGame=async(sz:number)=>{
     friendsScorePosted.current=false
+    const g=newGame(sz,rPlayers.length)
+    const myI=rPlayers.findIndex(p=>p.userId===me.id)
+    // Host transitions instantly — no waiting for server
+    setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
+    setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
+    // Publish game-started with full gameState directly via Ably — friend gets it in <100ms
     try{
-      await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})})
-      const g=newGame(sz,rPlayers.length)
-      await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({code,userId:me.id,gameState:g})})
-      setGame(g);setMyIdx(0);setConf(false);setPhase('play')
-      // Clear expiry — room lives until game ends or players leave
-      setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
-    }catch{}
+      const ch=ablyChannelRef.current
+      if(ch) await ch.publish('game-started',{gameState:g,players:rPlayers,gridSize:sz})
+    }catch(e){console.error('Ably game-started publish failed:',e)}
+    // Fire-and-forget API calls for DB persistence — never block the UI
+    fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})}).catch(()=>{})
+    fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code,userId:me.id,gameState:g})}).catch(()=>{})
   }
 
   const onLine=async(t:'h'|'v',r:number,c:number)=>{
@@ -1579,11 +1584,6 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         <FloatingPixels/>
 
         {showDMPanel&&<DMSharePanel me={me} code={code} inviteLink={inviteLink} onClose={()=>setShowDMPanel(false)}/>}
-        {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
-        <button onClick={()=>{const next=!showChat;setShowChat(next);setUnreadChat(0);showChatRef.current=next}} style={{position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 6px 24px rgba(99,102,241,.45)',zIndex:150,transition:'transform .2s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'} onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
-          <span style={{fontSize:22}}>💬</span>
-          {unreadChat>0&&<div style={{position:'absolute',top:0,right:0,width:18,height:18,borderRadius:'50%',background:'#ef4444',border:'2px solid white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'white'}}>{unreadChat>9?'9+':unreadChat}</div>}
-        </button>
 
         <div style={{flexShrink:0,background:'rgba(255,255,255,.9)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(232,234,246,.8)',padding:'14px 22px',display:'flex',alignItems:'center',gap:12,position:'relative',zIndex:2}}>
           <button onClick={resetBack} style={{width:38,height:38,borderRadius:12,background:'white',border:'1.5px solid #e8eaf6',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
@@ -1604,14 +1604,9 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
               <div style={{marginBottom:16}}>
                 <span style={{fontSize:42,fontWeight:900,color:'#3730a3',letterSpacing:'.18em',fontFamily:"'Outfit',sans-serif",lineHeight:1}}>{code}</span>
               </div>
-              <div style={{display:'flex',gap:8}}>
-                <button onClick={()=>setShowDMPanel(true)} style={{flex:1,height:40,borderRadius:10,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',color:'white',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 14px rgba(99,102,241,.3)',fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
-                  💬 Share via DM
-                </button>
-                <button onClick={()=>{setShowChat(true);showChatRef.current=true;setUnreadChat(0)}} style={{flex:1,height:40,borderRadius:10,background:'#eef2ff',border:'1.5px solid #c7d2fe',color:'#6366f1',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
-                  💬 Chat
-                </button>
-              </div>
+              <button onClick={()=>setShowDMPanel(true)} style={{width:'100%',height:40,borderRadius:10,background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',color:'white',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 4px 14px rgba(99,102,241,.3)',fontFamily:"'Outfit',sans-serif",transition:'all .2s'}}>
+                💬 Share via DM
+              </button>
             </div>
 
             <div style={{background:'white',borderRadius:20,border:'1.5px solid #f0f0f7',padding:'16px 18px',boxShadow:'0 4px 20px rgba(0,0,0,.05)',animation:'waitUp .4s .12s ease both',animationFillMode:'forwards'}}>
@@ -1717,18 +1712,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
           onReact={handleReact} chatMsgs={chatMsgs} chatInput={chatInput}
           setChatInput={setChatInput} sendChat={sendChat} isMulti={false}
           lastBotLine={lastOpponentLine}/>
-        <button onClick={()=>{const next=!showChat;setShowChat(next);setUnreadChat(0);showChatRef.current=next}} style={{
-          position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',
-          background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',cursor:'pointer',
-          display:'flex',alignItems:'center',justifyContent:'center',
-          boxShadow:'0 6px 24px rgba(99,102,241,.45)',zIndex:150,transition:'transform .2s',
-        }}
-          onMouseEnter={e=>e.currentTarget.style.transform='scale(1.1)'}
-          onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}>
-          <span style={{fontSize:22}}>💬</span>
-          {unreadChat>0&&<div style={{position:'absolute',top:0,right:0,width:18,height:18,borderRadius:'50%',background:'#ef4444',border:'2px solid white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'white'}}>{unreadChat>9?'9+':unreadChat}</div>}
-        </button>
-        {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
+
       </div>
     )
   }
@@ -1739,16 +1723,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         onAgain={()=>{setPhase('setup');setGame(null);setConf(false)}}
         onBack={resetBack} showConf={conf} rPlayers={rPlayers}
         onShare={()=>alert('Share to Campus Talks coming soon!')}/>
-      <button onClick={()=>{const next=!showChat;setShowChat(next);setUnreadChat(0);showChatRef.current=next}} style={{
-        position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',
-        background:'linear-gradient(135deg,#6366f1,#7c3aed)',border:'none',cursor:'pointer',
-        display:'flex',alignItems:'center',justifyContent:'center',
-        boxShadow:'0 6px 24px rgba(99,102,241,.45)',zIndex:150,
-      }}>
-        <span style={{fontSize:22}}>💬</span>
-        {unreadChat>0&&<div style={{position:'absolute',top:0,right:0,width:18,height:18,borderRadius:'50%',background:'#ef4444',border:'2px solid white',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:900,color:'white'}}>{unreadChat}</div>}
-      </button>
-      {showChat&&<RoomChat msgs={chatMsgs} myId={me.id} players={rPlayers} input={chatInput} setInput={setChatInput} onSend={sendChat} onClose={()=>{setShowChat(false);showChatRef.current=false}}/>}
+
     </div>
   )
 
