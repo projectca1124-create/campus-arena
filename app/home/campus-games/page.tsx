@@ -1062,11 +1062,9 @@ function RoomChat({msgs,myId,players,input,setInput,onSend,onClose}:{
           // Show avatar only on first message of each consecutive group from same sender
           const showAvatar=i===0||msgs[i-1].from!==m.from||msgs[i-1].color!==m.color
           // Use profileImage stored directly on the message (set at send time)
-          const avatarNode=m.profileImage
-            ?<img src={m.profileImage} alt={m.from} style={{width:30,height:30,borderRadius:'50%',objectFit:'cover',flexShrink:0,border:`2px solid ${m.color}55`,boxShadow:'0 1px 6px rgba(0,0,0,.1)'}}/>
-            :<div style={{width:30,height:30,borderRadius:'50%',background:`${m.color}20`,border:`2px solid ${m.color}45`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:m.color,flexShrink:0}}>
-                {(m.from||'?')[0].toUpperCase()}
-              </div>
+          const avatarNode=<div style={{width:30,height:30,borderRadius:'50%',background:`${m.color}20`,border:`2px solid ${m.color}45`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:800,color:m.color,flexShrink:0}}>
+              {((n:string)=>{const p=n.trim().split(' ');return(p[0]?.[0]||'')+(p[1]?.[0]||'')})(m.from||'?').toUpperCase()}
+            </div>
           const fmt2=(ts:number)=>new Date(ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})
           return(
             <div key={i} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start',gap:1,marginBottom:2}}>
@@ -1411,7 +1409,8 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     if(!chatInput.trim())return
     const myColor=rPlayers.find(p=>p.userId===me.id)?.color??PRESET_COLORS[0]
     const myPlayer=rPlayers.find(p=>p.userId===me.id)
-    const msg:ChatMsg={from:me.firstName,text:chatInput.trim(),color:myColor,ts:Date.now(),profileImage:myPlayer?.profileImage??me.profileImage??null}
+    // NOTE: profileImage intentionally excluded — can be base64 (hundreds of KB), would exceed Ably 64KB limit
+    const msg:ChatMsg={from:`${me.firstName} ${me.lastName}`.trim(),text:chatInput.trim(),color:myColor,ts:Date.now(),profileImage:null}
     // Optimistic add for sender — they see it immediately
     setChatMsgs(p=>[...p,msg]);setChatInput('')
     if(!showChatRef.current){setShowChat(true);showChatRef.current=true;setUnreadChat(0)}
