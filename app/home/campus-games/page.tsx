@@ -1225,17 +1225,18 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(players)setRP(players)
       })
 
-      // Game start — build fresh game locally, same as host does
+      // Game start — friend receives this and enters game instantly
       ch.subscribe('game-started',(msg:any)=>{
         const{players,gridSize:gs}=msg.data
-        if(!players||!gs)return
-        setRP(players)
-        const g=newGame(gs,players.length)
+        const activePlayers=Array.isArray(players)&&players.length>0?players:rPlayers
+        const size=gs||9
+        setRP(activePlayers)
+        const g=newGame(size,activePlayers.length||2)
         setGame(g);prevGameStateRef.current=g
         setRoomExpiresAt(null)
         if(countdownRef.current)clearInterval(countdownRef.current)
-        const idx=players.findIndex((p:RoomPlayer)=>p.userId===me.id)
-        if(idx>=0)setMyIdx(idx)
+        const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
+        setMyIdx(idx>=0?idx:0)
         setPhase('play')
       })
     })
@@ -1360,18 +1361,24 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     friendsScorePosted.current=false
     const g=newGame(sz,rPlayers.length)
     const myI=rPlayers.findIndex(p=>p.userId===me.id)
-    // Host transitions instantly — no waiting for server
-    setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
-    setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
-    // Publish game-started via Ably — only gridSize+players, no gameState (too large for Ably)
-    // Friend builds identical newGame() locally using same gridSize+playerCount
+
+    // Step 1: update DB first so poll safety net also works
+    try{
+      await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})})
+    }catch(e){console.error('start API failed:',e)}
+
+    // Step 2: publish via Ably — DB is now updated, friend gets this in <100ms
     try{
       const ch=ablyChannelRef.current
-      if(ch) await ch.publish('game-started',{players:rPlayers,gridSize:sz})
-    }catch(e){console.error('Ably game-started publish failed:',e)}
-    // Fire-and-forget API calls for DB persistence — never block the UI
-    fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})}).catch(()=>{})
+      if(ch) await ch.publish('game-started',{players:rPlayers,gridSize:sz,code})
+    }catch(e){console.error('Ably game-started failed:',e)}
+
+    // Step 3: transition host to game — happens after Ably publish so host enters same time as friend
+    setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
+    setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
+
+    // Persist gameState to DB in background
     fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({code,userId:me.id,gameState:g})}).catch(()=>{})
   }
