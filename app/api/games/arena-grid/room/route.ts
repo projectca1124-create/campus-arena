@@ -101,13 +101,13 @@ export async function POST(request: Request) {
 
       const updatedRoom = await (prisma as any).gameRoom.update({
         where: { code },
-        data: { status: 'playing' },
+        data: { status: 'playing', gridSize: gridSize || room.gridSize },
       })
 
-      // Publish game-started — client initialises fresh game from gridSize
+      // Publish game-started — use the gridSize the host selected, not the DB default
       await publishEvent(`game-room-${code}`, 'game-started', {
         room: updatedRoom,
-        gridSize: room.gridSize,
+        gridSize: gridSize || room.gridSize,
         players: room.players,
       }).catch(() => {})
 
