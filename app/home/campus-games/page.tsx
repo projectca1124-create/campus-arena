@@ -1183,11 +1183,17 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
     // ── Ably: proper Realtime init with token auth ──
     const ably=new Ably.Realtime({
-      authUrl:'/api/ably/auth',
-      authMethod:'POST',
-      authParams:{userId:me.id},
-      authHeaders:{'x-user-id':me.id},
-      queryTime:true,
+      authCallback:async(_:any,callback:any)=>{
+        try{
+          const res=await fetch('/api/ably/auth',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','x-user-id':me.id},
+            body:JSON.stringify({userId:me.id}),
+          })
+          const token=await res.json()
+          callback(null,token)
+        }catch(e){callback(e,null)}
+      },
     })
     ablyInstanceRef.current=ably
 
@@ -1227,19 +1233,26 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(players)setRP(players)
       })
 
-      // Game start — friend receives this and enters game instantly
+      // Game start via Ably — server publishes this when host calls action:'start'
+      // Shape: {players, gridSize, room} — players and gridSize always present
       ch.subscribe('game-started',(msg:any)=>{
-        const{players,gridSize:gs}=msg.data
-        const activePlayers=Array.isArray(players)&&players.length>0?players:rPlayers
-        const size=gs||9
-        setRP(activePlayers)
-        const g=newGame(size,activePlayers.length||2)
-        setGame(g);prevGameStateRef.current=g
-        setRoomExpiresAt(null)
-        if(countdownRef.current)clearInterval(countdownRef.current)
-        const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
-        setMyIdx(idx>=0?idx:0)
-        setPhase('play')
+        const players=msg.data.players
+        const gs=msg.data.gridSize||msg.data.room?.gridSize
+        // NEVER fall back to rPlayers closure — it's stale from when startPoll() ran
+        if(!Array.isArray(players)||players.length===0||!gs)return
+        // Only transition if still waiting — ignore if host already entered via launchGame
+        setPhase(prev=>{
+          if(prev==='play'||prev==='done')return prev // host already in game, ignore
+          if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null}
+          setRP(players)
+          const g=newGame(gs,players.length)
+          setGame(g);prevGameStateRef.current=g
+          setRoomExpiresAt(null)
+          if(countdownRef.current)clearInterval(countdownRef.current)
+          const idx=players.findIndex((p:RoomPlayer)=>p.userId===me.id)
+          setMyIdx(idx>=0?idx:0)
+          return 'play'
+        })
       })
     })
 
@@ -1258,23 +1271,26 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(rm.lastReaction&&rm.lastReaction.ts>Date.now()-1500){
           setReactId(p=>{const id=p;setReactions(prev=>[...prev,{id,emoji:rm.lastReaction.emoji,x:10+Math.random()*80}]);setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000);return p+1})
         }
-        // Game start safety net — only applies if Ably game-started event was missed
-        if(rm.status==='playing'&&rm.gameState){
-          const newGs=rm.gameState
-          const countMoves=(gs:GS)=>{
-            let m=0
-            for(let r=0;r<=gs.rows;r++)for(let c=0;c<gs.cols;c++)if(gs.hLines[r]?.[c])m++
-            for(let r=0;r<gs.rows;r++)for(let c=0;c<=gs.cols;c++)if(gs.vLines[r]?.[c])m++
-            return m
-          }
-          const serverMoves=countMoves(newGs)
-          const localMoves=prevGameStateRef.current?countMoves(prevGameStateRef.current):0
-          if(serverMoves>localMoves){
-            prevGameStateRef.current=newGs
-            setGame(newGs);setPhase('play')
-          }
-          const idx=rm.players.findIndex((p:RoomPlayer)=>p.userId===me.id)
-          if(idx>=0)setMyIdx(idx)
+        // Poll safety net — catches any player who missed the Ably game-started event
+        // This fires when DB status='playing', regardless of move count
+        // setPhase uses functional updater so it only transitions if still in 'waiting'
+        if(rm.status==='playing'){
+          const activePlayers=rm.players??[]
+          const gs=rm.gridSize??rm.gameState?.rows??9
+          setPhase(prev=>{
+            if(prev==='waiting'||prev==='sizepick'){
+              // Build fresh game — same as what host built, guaranteed identical
+              const g=newGame(gs,activePlayers.length||2)
+              setRP(activePlayers)
+              setGame(g);prevGameStateRef.current=g
+              setRoomExpiresAt(null)
+              if(countdownRef.current)clearInterval(countdownRef.current)
+              const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
+              setMyIdx(idx>=0?idx:0)
+              return 'play'
+            }
+            return prev
+          })
         }
       }catch{}
     },3000)
@@ -1364,19 +1380,20 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     const g=newGame(sz,rPlayers.length)
     const myI=rPlayers.findIndex(p=>p.userId===me.id)
 
-    // Publish to Ably + transition host simultaneously — everyone enters at the exact same moment
-    const ch=ablyChannelRef.current
-    await Promise.all([
-      ch?ch.publish('game-started',{players:rPlayers,gridSize:sz}):Promise.resolve(),
-      Promise.resolve().then(()=>{
-        setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
-        setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
-      })
-    ])
+    // STEP 1: Call start API — server updates DB to status='playing' AND
+    // publishes 'game-started' via server-side Ably in one atomic operation.
+    // Friends receive the Ably event from the server directly (<100ms).
+    // Poll safety net (every 3s) catches anyone who missed the Ably event.
+    try{
+      await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})})
+    }catch(e){console.error('start API failed:',e)}
 
-    // DB updates fire-and-forget in background — never block anyone
-    fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})}).catch(()=>{})
+    // STEP 2: Host enters game immediately after API confirms
+    setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
+    setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
+
+    // STEP 3: Persist gameState to DB in background (for move sync)
     fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({code,userId:me.id,gameState:g})}).catch(()=>{})
   }
@@ -1389,6 +1406,7 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     // Publish move via stored channel ref — same connection as subscriber, instant delivery
     const ch=ablyChannelRef.current
     if(ch){
+      // gameState contains no images so size is fine (~2KB for 9x9)
       ch.publish('move-made',{gameState:n,move:{t,r,c},userId:me.id}).catch((e:any)=>{
         console.error('Move publish failed:',e)
       })
