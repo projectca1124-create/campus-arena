@@ -1225,17 +1225,16 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(players)setRP(players)
       })
 
-      // Game start — receives full gameState from host directly via Ably
+      // Game start — build fresh game locally, same as host does
       ch.subscribe('game-started',(msg:any)=>{
-        const{gameState,players,gridSize:gs,room}=msg.data
-        const activePlayers=players??room?.players??[]
-        if(activePlayers.length)setRP(activePlayers)
-        // Use gameState sent by host directly — no need to reconstruct
-        const g=gameState??newGame(gs??room?.gridSize??9,activePlayers.length||2)
+        const{players,gridSize:gs}=msg.data
+        if(!players||!gs)return
+        setRP(players)
+        const g=newGame(gs,players.length)
         setGame(g);prevGameStateRef.current=g
         setRoomExpiresAt(null)
         if(countdownRef.current)clearInterval(countdownRef.current)
-        const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
+        const idx=players.findIndex((p:RoomPlayer)=>p.userId===me.id)
         if(idx>=0)setMyIdx(idx)
         setPhase('play')
       })
@@ -1364,10 +1363,11 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     // Host transitions instantly — no waiting for server
     setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
     setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
-    // Publish game-started with full gameState directly via Ably — friend gets it in <100ms
+    // Publish game-started via Ably — only gridSize+players, no gameState (too large for Ably)
+    // Friend builds identical newGame() locally using same gridSize+playerCount
     try{
       const ch=ablyChannelRef.current
-      if(ch) await ch.publish('game-started',{gameState:g,players:rPlayers,gridSize:sz})
+      if(ch) await ch.publish('game-started',{players:rPlayers,gridSize:sz})
     }catch(e){console.error('Ably game-started publish failed:',e)}
     // Fire-and-forget API calls for DB persistence — never block the UI
     fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
