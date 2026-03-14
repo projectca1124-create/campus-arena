@@ -525,21 +525,16 @@ export default function CampusTalksPage() {
         <div style={{ padding: '28px 32px' }}>
 
           {/* Header */}
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 24 }}>🔥</span>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
-                  Seniors on Demand
-                </h2>
-              </div>
-              <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-                Real talk. Real answers. From seniors who've been there — drop your question, start the convo.
-              </p>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 24 }}>🔥</span>
+              <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+                Seniors on Demand
+              </h2>
             </div>
-            <button onClick={() => setShowAskModal(true)} style={{ ...btnPrimary, flexShrink: 0 }}>
-              <Plus size={15} /> Ask a Question
-            </button>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
+              Real talk. Real answers. From seniors who've been there — drop your question, start the convo.
+            </p>
           </div>
 
           {/* Search + Filter */}
@@ -563,32 +558,37 @@ export default function CampusTalksPage() {
             </div>
           </div>
 
-          {/* Tabs — Base44: white bg, border, pill triggers */}
-          <div style={{ marginBottom: 24, display: 'flex', background: 'white', border: '1px solid #f3f4f6', borderRadius: 10, padding: 4, width: 'fit-content', gap: 2 }}>
-            {TABS.map(tab => (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                style={{
-                  padding: '7px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 500,
-                  background: activeTab === tab.key ? '#f3f4f6' : 'transparent',
-                  color: activeTab === tab.key ? '#111827' : '#6b7280',
-                  fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
-                  transition: 'all 0.15s',
-                }}>
-                {tab.label}
-                {tab.key === 'unanswered' && unansweredCount > 0 && (
-                  <span style={{
-                    minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
-                    background: activeTab === 'unanswered' ? '#4f46e5' : '#e5e7eb',
-                    color: activeTab === 'unanswered' ? 'white' : '#6b7280',
-                    fontSize: 10, fontWeight: 700,
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          {/* Tabs + Ask a Question button on same row */}
+          <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', background: 'white', border: '1px solid #f3f4f6', borderRadius: 10, padding: 4, gap: 2 }}>
+              {TABS.map(tab => (
+                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    padding: '7px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 500,
+                    background: activeTab === tab.key ? '#f3f4f6' : 'transparent',
+                    color: activeTab === tab.key ? '#111827' : '#6b7280',
+                    fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
+                    transition: 'all 0.15s',
                   }}>
-                    {unansweredCount > 99 ? '99+' : unansweredCount}
-                  </span>
-                )}
-              </button>
-            ))}
+                  {tab.label}
+                  {tab.key === 'unanswered' && unansweredCount > 0 && (
+                    <span style={{
+                      minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
+                      background: activeTab === 'unanswered' ? '#4f46e5' : '#e5e7eb',
+                      color: activeTab === 'unanswered' ? 'white' : '#6b7280',
+                      fontSize: 10, fontWeight: 700,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {unansweredCount > 99 ? '99+' : unansweredCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowAskModal(true)} style={{ ...btnPrimary }}>
+              <Plus size={15} /> Ask a Question
+            </button>
           </div>
 
           {/* Questions list — white rounded cards with hover shadow */}
