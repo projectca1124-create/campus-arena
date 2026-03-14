@@ -1,6 +1,6 @@
 // app/api/messages/route.ts — ABLY VERSION
 import { PrismaClient } from '@prisma/client'
-import { publishEvent } from '@/lib/ably-server'
+import { publishEvent } from '@/lib/socket-server'
 import { notifyGroupMessage } from '@/lib/notifications'
 
 const prisma = new PrismaClient()

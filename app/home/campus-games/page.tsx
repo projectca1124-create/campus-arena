@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Trophy, Users, Bot, Copy, Check, Loader2, Zap, Grid3X3, Gamepad2, Send, UserPlus, Share2, Search } from 'lucide-react'
-import Ably from 'ably'
+import { getSocket } from '@/lib/socket-client'
 
 // ─── Constants ────────────────────────────────────────────────────
 const PRESET_COLORS = ['#6366f1','#f59e0b','#10b981','#e11d48','#0ea5e9','#8b5cf6']
@@ -1160,107 +1160,88 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
 
   const pollRef=useRef<ReturnType<typeof setInterval>|null>(null)
   const countdownRef=useRef<ReturnType<typeof setInterval>|null>(null)
-  const ablyChannelRef=useRef<any>(null)
-  const ablyInstanceRef=useRef<any>(null)
+  const currentCodeRef=useRef<string>('')
   const ROOM_TTL=5*60*1000
 
   const saveRoom=(c:string,host:boolean,exp:number,t:number)=>{try{localStorage.setItem('cg_room',JSON.stringify({code:c,host,exp,total:t}))}catch{}}
   const clearRoom=()=>{try{localStorage.removeItem('cg_room')}catch{}}
+
   const stopPoll=()=>{
     if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null}
-    if(ablyChannelRef.current){
-      try{ablyChannelRef.current.unsubscribe()}catch{}
-      ablyChannelRef.current=null
-    }
-    if(ablyInstanceRef.current){
-      try{ablyInstanceRef.current.close()}catch{}
-      ablyInstanceRef.current=null
+    // Leave the socket game room
+    if(currentCodeRef.current){
+      try{getSocket().emit('game:leave-room',{code:currentCodeRef.current})}catch{}
     }
   }
 
   const startPoll=useCallback((c:string)=>{
     stopPoll()
+    currentCodeRef.current=c
 
-    // ── Ably: proper Realtime init with token auth ──
-    const ably=new Ably.Realtime({
-      authCallback:async(_:any,callback:any)=>{
-        try{
-          const res=await fetch('/api/ably/auth',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','x-user-id':me.id},
-            body:JSON.stringify({userId:me.id}),
-          })
-          const token=await res.json()
-          callback(null,token)
-        }catch(e){callback(e,null)}
-      },
+    const socket=getSocket(me.id)
+
+    // Join the Socket.io game room
+    socket.emit('game:join-room',{code:c})
+
+    // ── In-game chat ──────────────────────────────────────────────
+    socket.on('game:chat-message',(m:ChatMsg&{userId:string})=>{
+      setChatMsgs(prev=>{
+        if(prev.find(x=>x.ts===m.ts&&x.text===m.text&&x.from===m.from))return prev
+        return [...prev,m]
+      })
+      if(!showChatRef.current){setShowChat(true);showChatRef.current=true;setUnreadChat(0)}
+      else{setUnreadChat(0)}
     })
-    ablyInstanceRef.current=ably
 
-    ably.connection.on('connected',()=>{
-      const ch=ably.channels.get(`game-room-${c}`)
-      ablyChannelRef.current=ch
+    // ── Opponent moves ─────────────────────────────────────────────
+    socket.on('game:move-made',(data:{gameState:GS;move:{t:'h'|'v';r:number;c:number};userId:string})=>{
+      if(data.userId===me.id)return
+      if(data.gameState){setGame(data.gameState);prevGameStateRef.current=data.gameState}
+      if(data.move){
+        if(opponentLineTimer.current)clearTimeout(opponentLineTimer.current)
+        setLastOpponentLine(data.move)
+        opponentLineTimer.current=setTimeout(()=>setLastOpponentLine(null),1200)
+      }
+    })
 
-      // Chat — peer-to-peer via Ably, instant delivery
-      ch.subscribe('chat-message',(msg:any)=>{
-        const m=msg.data as ChatMsg
-        setChatMsgs(prev=>{
-          if(prev.find(x=>x.ts===m.ts&&x.text===m.text&&x.from===m.from))return prev
-          return [...prev,m]
-        })
-        if(!showChatRef.current){
-          setShowChat(true);showChatRef.current=true;setUnreadChat(0)
-        } else {
-          setUnreadChat(0)
-        }
-      })
+    // ── Player joined room ─────────────────────────────────────────
+    socket.on('game:player-joined',()=>{
+      // Refresh player list from DB
+      fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'get',userId:me.id,code:c})})
+        .then(r=>r.json()).then(d=>{ if(d.room?.players) setRP(d.room.players) }).catch(()=>{})
+    })
 
-      // Game moves — instant delivery
-      ch.subscribe('move-made',(msg:any)=>{
-        const{gameState,move,userId:mover}=msg.data
-        if(mover===me.id)return
-        if(gameState){setGame(gameState);prevGameStateRef.current=gameState}
-        if(move){
-          if(opponentLineTimer.current)clearTimeout(opponentLineTimer.current)
-          setLastOpponentLine(move)
-          opponentLineTimer.current=setTimeout(()=>setLastOpponentLine(null),1200)
-        }
-      })
-
-      // Room presence
-      ch.subscribe('player-joined',(msg:any)=>{
-        const{players}=msg.data
-        if(players)setRP(players)
-      })
-
-      // Game start via Ably — server publishes this when host calls action:'start'
-      // Shape: {players, gridSize, room} — players and gridSize always present
-      ch.subscribe('game-started',(msg:any)=>{
-        const players=msg.data.players
-        const gs=msg.data.gridSize||msg.data.room?.gridSize
-        // NEVER fall back to rPlayers closure — it's stale from when startPoll() ran
-        if(!Array.isArray(players)||players.length===0||!gs)return
-        // Only transition if still waiting — ignore if host already entered via launchGame
-        setPhase(prev=>{
-          if(prev==='play'||prev==='done')return prev // host already in game, ignore
-          if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null}
-          setRP(players)
-          const g=newGame(gs,players.length)
-          setGame(g);prevGameStateRef.current=g
-          setRoomExpiresAt(null)
-          if(countdownRef.current)clearInterval(countdownRef.current)
-          const idx=players.findIndex((p:RoomPlayer)=>p.userId===me.id)
-          setMyIdx(idx>=0?idx:0)
-          return 'play'
-        })
+    // ── Game started (broadcast from server when host starts) ──────
+    socket.on('game:started',(data:{gridSize:number;players:RoomPlayer[]})=>{
+      const{gridSize:gs,players}=data
+      if(!Array.isArray(players)||!players.length||!gs)return
+      setPhase(prev=>{
+        if(prev==='play'||prev==='done')return prev // host already in, ignore
+        if(pollRef.current){clearInterval(pollRef.current);pollRef.current=null}
+        setRP(players)
+        const g=newGame(gs,players.length)
+        setGame(g);prevGameStateRef.current=g
+        setRoomExpiresAt(null)
+        if(countdownRef.current)clearInterval(countdownRef.current)
+        const idx=players.findIndex((p:RoomPlayer)=>p.userId===me.id)
+        setMyIdx(idx>=0?idx:0)
+        return 'play'
       })
     })
 
-    ably.connection.on('failed',(err:any)=>{console.error('Ably connection failed:',err)})
-    ably.connection.on('disconnected',()=>{console.warn('Ably disconnected')})
+    // ── Reactions ──────────────────────────────────────────────────
+    socket.on('game:reaction',(data:{emoji:string;userId:string})=>{
+      setReactId(p=>{
+        const id=p
+        setReactions(prev=>[...prev,{id,emoji:data.emoji,x:10+Math.random()*80}])
+        setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000)
+        return p+1
+      })
+    })
 
-    // ── Poll: room state only (player list + game start as safety net) ──
-    // Only reads players and status — never touches chat
+    // ── Poll: safety net only (3s) ─────────────────────────────────
+    // Catches any player who missed the socket game:started event
     pollRef.current=setInterval(async()=>{
       try{
         const r=await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1268,21 +1249,13 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
         if(!r.ok)return
         const d=await r.json(); const rm=d.room
         setRP(rm.players??[])
-        if(rm.lastReaction&&rm.lastReaction.ts>Date.now()-1500){
-          setReactId(p=>{const id=p;setReactions(prev=>[...prev,{id,emoji:rm.lastReaction.emoji,x:10+Math.random()*80}]);setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000);return p+1})
-        }
-        // Poll safety net — catches any player who missed the Ably game-started event
-        // This fires when DB status='playing', regardless of move count
-        // setPhase uses functional updater so it only transitions if still in 'waiting'
         if(rm.status==='playing'){
           const activePlayers=rm.players??[]
           const gs=rm.gridSize??rm.gameState?.rows??9
           setPhase(prev=>{
             if(prev==='waiting'||prev==='sizepick'){
-              // Build fresh game — same as what host built, guaranteed identical
               const g=newGame(gs,activePlayers.length||2)
-              setRP(activePlayers)
-              setGame(g);prevGameStateRef.current=g
+              setRP(activePlayers);setGame(g);prevGameStateRef.current=g
               setRoomExpiresAt(null)
               if(countdownRef.current)clearInterval(countdownRef.current)
               const idx=activePlayers.findIndex((p:RoomPlayer)=>p.userId===me.id)
@@ -1380,45 +1353,27 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
     const g=newGame(sz,rPlayers.length)
     const myI=rPlayers.findIndex(p=>p.userId===me.id)
 
-    // STEP 1: Call start API — server updates DB to status='playing' AND
-    // publishes 'game-started' via server-side Ably in one atomic operation.
-    // Friends receive the Ably event from the server directly (<100ms).
-    // Poll safety net (every 3s) catches anyone who missed the Ably event.
-    try{
-      await fetch('/api/games/arena-grid/room',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({action:'start',userId:me.id,code,gridSize:sz})})
-    }catch(e){console.error('start API failed:',e)}
+    // Emit game:start via Socket.io — server updates DB and broadcasts game:started to all players
+    getSocket().emit('game:start',{code,gridSize:sz,players:rPlayers},(res:any)=>{
+      if(res?.error)console.error('game:start failed:',res.error)
+    })
 
-    // STEP 2: Host enters game immediately after API confirms
+    // Host enters game immediately
     setGame(g);setMyIdx(myI>=0?myI:0);setConf(false);setPhase('play')
     setRoomExpiresAt(null);if(countdownRef.current)clearInterval(countdownRef.current)
-
-    // STEP 3: Persist gameState to DB in background (for move sync)
-    fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code,userId:me.id,gameState:g})}).catch(()=>{})
   }
 
   const onLine=async(t:'h'|'v',r:number,c:number)=>{
     if(!game||game.done||(game.turn-1)!==myIdx)return
     const n=place(game,t,r,c);if(!n)return
-    // Optimistic update — instant local render, no waiting for server
+    // Optimistic update — instant local render
     setGame(n)
-    // Publish move via stored channel ref — same connection as subscriber, instant delivery
-    const ch=ablyChannelRef.current
-    if(ch){
-      // gameState contains no images so size is fine (~2KB for 9x9)
-      ch.publish('move-made',{gameState:n,move:{t,r,c},userId:me.id}).catch((e:any)=>{
-        console.error('Move publish failed:',e)
-      })
-    }
-    // PATCH server in background — persistence only, never blocks UI or move delivery
-    fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code,userId:me.id,move:{t,r,c},gameState:n})}).catch(()=>{})
+    // Broadcast move via Socket.io — zero latency delivery to opponents
+    getSocket().emit('game:move',{code,gameState:n,move:{t,r,c}})
     if(n.done){
       const mx=Math.max(...n.scores)
       const won=n.scores[myIdx]===mx&&n.scores.filter(s=>s===mx).length===1
       if(won)setConf(true);setPhase('done')
-      // Guard: only post score once per game
       if(!friendsScorePosted.current){
         friendsScorePosted.current=true
         try{await fetch('/api/games/arena-grid/score',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1428,37 +1383,17 @@ function FriendsFlow({me,onBack}:{me:Me;onBack:()=>void}){
   }
 
   const handleReact=async(emoji:string)=>{
-    setReactId(p=>{const id=p;setReactions(prev=>[...prev,{id,emoji,x:10+Math.random()*80}]);setTimeout(()=>setReactions(prev=>prev.filter(x=>x.id!==id)),1000);return p+1})
-    try{await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code,userId:me.id,reaction:{emoji,ts:Date.now()}})})}catch{}
+    // Broadcast via Socket.io — instant for all players
+    getSocket().emit('game:react',{code,emoji})
   }
 
   const sendChat=async()=>{
     if(!chatInput.trim())return
     const myColor=rPlayers.find(p=>p.userId===me.id)?.color??PRESET_COLORS[0]
-    const myPlayer=rPlayers.find(p=>p.userId===me.id)
-    // NOTE: profileImage intentionally excluded — can be base64 (hundreds of KB), would exceed Ably 64KB limit
     const msg:ChatMsg={from:`${me.firstName} ${me.lastName}`.trim(),text:chatInput.trim(),color:myColor,ts:Date.now(),profileImage:null}
-    // Optimistic add for sender — they see it immediately
-    setChatMsgs(p=>[...p,msg]);setChatInput('')
-    if(!showChatRef.current){setShowChat(true);showChatRef.current=true;setUnreadChat(0)}
-    // Publish directly via the subscribed channel — same connection, guaranteed delivery
-    // This is the ONLY publish path. Recipient's ch.subscribe('chat-message') receives it instantly.
-    try{
-      const ch=ablyChannelRef.current
-      if(!ch)throw new Error('Ably channel not ready')
-      await ch.publish('chat-message',msg)
-    }catch(e){
-      console.error('Ably chat publish failed:',e)
-      // If Ably fails, fall back to API publish
-      try{
-        await fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({code,userId:me.id,chat:msg})})
-      }catch{}
-    }
-    // Persist to DB silently — never blocks delivery
-    fetch('/api/games/arena-grid/room',{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({code,userId:me.id,chat:msg})}).catch(()=>{})
+    setChatInput('')
+    // Send via Socket.io — instant delivery, server broadcasts to all in room
+    getSocket().emit('game:chat',{code,message:msg})
   }
 
   const resetBack=()=>{

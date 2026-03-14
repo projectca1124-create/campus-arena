@@ -2,7 +2,7 @@
 // Central hub: DB notification + Ably real-time ping + Web Push (OS-level, works when browser closed)
 
 import { PrismaClient } from '@prisma/client'
-import { publishEvent } from '@/lib/ably-server'
+import { publishEvent } from '@/lib/socket-server'
 import { sendPushToUser } from '@/lib/web-push'
 
 const prisma = new PrismaClient()

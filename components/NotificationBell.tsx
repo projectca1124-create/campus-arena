@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Bell, Trash2, MessageSquare, MessageCircle, Megaphone, Users } from 'lucide-react'
-import { getAblyClient } from '@/lib/socket-client'
+import { getSocket } from '@/lib/socket-client'
 
 interface Notification {
   id: string; type: string; title: string; body: string
@@ -40,6 +40,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
   const [isClearing, setIsClearing] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -62,33 +63,26 @@ export default function NotificationBell({ userId }: { userId: string }) {
     } catch (err) { console.error('Notifications fetch error:', err) }
   }
 
+  // Initial fetch
   useEffect(() => { if (userId) fetchNotifications() }, [userId])
 
+  // ── Socket.io: listen for new notifications on personal user room ──
   useEffect(() => {
     if (!userId) return
-    let channel: any = null
-    let mounted = true
-    const handler = (msg: any) => {
-      if (!mounted) return
-      const notif: Notification = msg.data
-      setNotifications(prev => prev.some(n => n.id === notif.id) ? prev : [notif, ...prev])
+
+    const socket = getSocket(userId)
+
+    const handleNewNotification = (notif: Notification) => {
+      setNotifications(prev =>
+        prev.some(n => n.id === notif.id) ? prev : [notif, ...prev]
+      )
       setUnreadCount(prev => prev + 1)
     }
-    const setup = async () => {
-      try {
-        const ably = getAblyClient(userId)
-        channel = ably.channels.get(`user-${userId}`)
-        if (!mounted) return
-        channel.subscribe('new-notification', handler)
-      } catch (err) {
-        if (process.env.NODE_ENV !== 'production') return
-        console.error('Ably notification subscription error:', err)
-      }
-    }
-    setup()
+
+    socket.on('new-notification', handleNewNotification)
+
     return () => {
-      mounted = false
-      try { if (channel) channel.unsubscribe('new-notification', handler) } catch {}
+      socket.off('new-notification', handleNewNotification)
     }
   }, [userId])
 
@@ -99,7 +93,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
     if (unreadCount > 0) {
       try {
         await fetch('/api/notifications', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId }),
         })
         setUnreadCount(0)
@@ -125,15 +120,21 @@ export default function NotificationBell({ userId }: { userId: string }) {
       const openDMId = params.get('openDM')
       const groupId = params.get('groupId')
       if (openDMId) {
-        window.dispatchEvent(new CustomEvent('notification-navigate', { detail: { type: 'dm', userId: openDMId, dmName: params.get('dmName') || '' } }))
+        window.dispatchEvent(new CustomEvent('notification-navigate', {
+          detail: { type: 'dm', userId: openDMId, dmName: params.get('dmName') || '' }
+        }))
         return
       }
       if (groupId) {
-        window.dispatchEvent(new CustomEvent('notification-navigate', { detail: { type: 'group', groupId } }))
+        window.dispatchEvent(new CustomEvent('notification-navigate', {
+          detail: { type: 'group', groupId }
+        }))
         return
       }
       if (n.type === 'dm') {
-        window.dispatchEvent(new CustomEvent('notification-navigate', { detail: { type: 'tab', tab: 'dms' } }))
+        window.dispatchEvent(new CustomEvent('notification-navigate', {
+          detail: { type: 'tab', tab: 'dms' }
+        }))
       }
       return
     }
@@ -144,7 +145,8 @@ export default function NotificationBell({ userId }: { userId: string }) {
     setIsClearing(true)
     try {
       await fetch('/api/notifications', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId }),
       })
       setNotifications([]); setUnreadCount(0)
@@ -156,7 +158,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bell button — 36x36 touch target */}
       <button
         onClick={handleOpen}
         className="relative flex items-center justify-center hover:bg-gray-100 rounded-lg text-gray-500 transition-all"
@@ -176,10 +177,6 @@ export default function NotificationBell({ userId }: { userId: string }) {
         <div
           className="absolute top-full mt-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
           style={{
-            // ✅ KEY FIX: On mobile the dropdown must not overflow the left edge of the screen.
-            // right: 0 anchors to the bell's right edge.
-            // width is capped at (100vw - 16px) so it never bleeds off screen.
-            // On desktop it's the normal 340px.
             right: 0,
             width: 'min(340px, calc(100vw - 16px))',
             boxShadow: '0 10px 40px rgba(0,0,0,0.12)',

@@ -1,6 +1,6 @@
 // app/api/games/arena-grid/room/route.ts
 import { PrismaClient } from '@prisma/client'
-import { publishEvent } from '@/lib/ably-server'
+import { publishEvent } from '@/lib/socket-server'
 
 const prisma = new PrismaClient()
 

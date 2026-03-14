@@ -1,5 +1,5 @@
 // lib/socket-client.ts
-// Replaces ably-client.ts entirely
+
 // Single persistent Socket.io connection for the entire app
 
 import { io, Socket } from 'socket.io-client'

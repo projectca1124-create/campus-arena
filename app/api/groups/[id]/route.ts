@@ -1,6 +1,6 @@
 // app/api/groups/[id]/route.ts
 import { PrismaClient } from '@prisma/client'
-import { publishEvent } from '@/lib/ably-server'
+import { publishEvent } from '@/lib/socket-server'
 import { createNotification } from '@/lib/notifications'
 
 const prisma = new PrismaClient()
