@@ -9,6 +9,27 @@ interface SplashScreenProps {
 
 function getUniversityFromEmail(email: string): string {
   const domain = email.split('@')[1]?.toLowerCase() || ''
+
+  // Indian: .ac.in or .edu.in → e.g. srmist.edu.in, vit.ac.in
+  if (domain.endsWith('.ac.in') || domain.endsWith('.edu.in')) {
+    const parts = domain.split('.')
+    // parts[-3] is the university slug: srmist, vit, bits-pilani, etc.
+    return parts[parts.length - 3].toUpperCase()
+  }
+
+  // UK: .ac.uk → e.g. ox.ac.uk, cam.ac.uk
+  if (domain.endsWith('.ac.uk')) {
+    const parts = domain.split('.')
+    return parts[parts.length - 3].toUpperCase()
+  }
+
+  // Australian: .edu.au → e.g. unimelb.edu.au
+  if (domain.endsWith('.edu.au')) {
+    const parts = domain.split('.')
+    return parts[parts.length - 3].toUpperCase()
+  }
+
+  // US: .edu → e.g. stanford.edu, uta.edu
   const parts = domain.split('.')
   const eduIndex = parts.indexOf('edu')
   const mainPart = eduIndex > 0 ? parts[eduIndex - 1] : parts[0]
@@ -21,11 +42,8 @@ export default function SplashScreen({ email }: SplashScreenProps) {
   const uni = getUniversityFromEmail(email)
 
   useEffect(() => {
-    // Phase 1: Enter animation (already happening via CSS)
     const glowTimer = setTimeout(() => setPhase('glow'), 800)
-    // Phase 2: Exit after 3 seconds
     const exitTimer = setTimeout(() => setPhase('exit'), 2600)
-    // Phase 3: Navigate
     const navTimer = setTimeout(() => {
       router.push('/home/profile?onboarding=true')
     }, 3200)
@@ -41,7 +59,6 @@ export default function SplashScreen({ email }: SplashScreenProps) {
     <div className={`fixed inset-0 z-[100] flex items-center justify-center overflow-hidden transition-opacity duration-500 ${phase === 'exit' ? 'opacity-0' : 'opacity-100'}`}>
       {/* Animated gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-800">
-        {/* Animated orbs */}
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-400/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
@@ -64,19 +81,19 @@ export default function SplashScreen({ email }: SplashScreenProps) {
       </div>
 
       {/* Content */}
-      <div className={`relative z-10 text-center transition-all duration-700 ${phase === 'enter' ? 'scale-95 opacity-0 translate-y-4' : 'scale-100 opacity-100 translate-y-0'}`}
-        style={{ transitionDelay: phase === 'enter' ? '0ms' : '200ms' }}>
-        
+      <div
+        className={`relative z-10 text-center transition-all duration-700 ${phase === 'enter' ? 'scale-95 opacity-0 translate-y-4' : 'scale-100 opacity-100 translate-y-0'}`}
+        style={{ transitionDelay: phase === 'enter' ? '0ms' : '200ms' }}
+      >
         {/* Logo */}
         <div className={`w-20 h-20 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-8 border border-white/20 transition-all duration-700 ${phase === 'glow' ? 'shadow-[0_0_60px_rgba(129,140,248,0.5)]' : ''}`}>
           <span className="text-white font-bold text-2xl">CA</span>
         </div>
 
-        {/* Welcome text */}
         <p className="text-indigo-200 text-sm font-medium tracking-widest uppercase mb-3 animate-fadeIn" style={{ animationDelay: '0.4s' }}>
           Welcome to
         </p>
-        
+
         <h1 className="text-5xl font-extrabold text-white mb-3 animate-fadeIn" style={{ animationDelay: '0.6s' }}>
           <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-indigo-200 to-purple-200">
             {uni} Campus Arena
@@ -87,7 +104,6 @@ export default function SplashScreen({ email }: SplashScreenProps) {
           Your campus, your community
         </p>
 
-        {/* Loading dots */}
         <div className="flex justify-center gap-1.5 mt-8 animate-fadeIn" style={{ animationDelay: '1.2s' }}>
           <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0s' }} />
           <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }} />
@@ -95,7 +111,6 @@ export default function SplashScreen({ email }: SplashScreenProps) {
         </div>
       </div>
 
-      {/* CSS animations */}
       <style jsx>{`
         @keyframes float {
           0%, 100% { transform: translateY(0px) scale(1); opacity: 0.3; }

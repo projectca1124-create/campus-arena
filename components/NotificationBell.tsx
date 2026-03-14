@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Bell, Trash2, MessageSquare, MessageCircle, Megaphone, Users } from 'lucide-react'
-import { getAblyClient } from '@/lib/ably-client'
+import { getAblyClient } from '@/lib/socket-client'
 
 interface Notification {
   id: string; type: string; title: string; body: string
