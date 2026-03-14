@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { MessageSquare, Megaphone, LogOut, Lock, Gamepad2, ArrowLeft } from 'lucide-react'
 import NotificationBell from '@/components/NotificationBell'
 import { usePushNotifications } from '@/lib/use-push-notifications'
+import { getSocket } from '@/lib/socket-client'
 
 interface ShellUser {
   id: string; email: string; firstName: string; lastName: string
@@ -25,8 +26,8 @@ function ShellAvatar({ src, firstName, lastName, size = 36, className = '' }: {
   )
 }
 
-function NavItem({ icon, label, active, onClick, locked }: {
-  icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; locked?: boolean
+function NavItem({ icon, label, active, onClick, locked, badge }: {
+  icon: React.ReactNode; label: string; active?: boolean; onClick?: () => void; locked?: boolean; badge?: number
 }) {
   return (
     <button
@@ -39,6 +40,17 @@ function NavItem({ icon, label, active, onClick, locked }: {
     >
       <span className="flex items-center justify-center w-[18px] h-[18px] flex-shrink-0">{icon}</span>
       <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{label}</span>
+      {badge ? (
+        <span style={{
+          minWidth: 20, height: 20, borderRadius: 10,
+          background: '#4f46e5', color: 'white',
+          fontSize: 10, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 5px', flexShrink: 0,
+        }}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : null}
       {locked && <Lock style={{ width: 12, height: 12, flexShrink: 0 }} />}
     </button>
   )
@@ -55,6 +67,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
   const pathname = usePathname()
   const [user, setUser] = useState<ShellUser | null>(null)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [totalUnread, setTotalUnread] = useState(0)
 
   usePushNotifications(user?.id)
 
@@ -65,6 +78,45 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
       setUser(JSON.parse(userStr))
     } catch { router.push('/auth') }
   }, [router])
+
+  // ── Keep socket alive + track unread counts on all pages ──────────
+  useEffect(() => {
+    if (!user?.id) return
+    const socket = getSocket(user.id)
+    if (!socket.connected) socket.connect()
+
+    // Fetch initial unread count from DM conversations
+    fetch(`/api/dm?userId=${user.id}`)
+      .then(r => r.json())
+      .then(d => {
+        const convs = d.conversations || []
+        const count = convs.reduce((s: number, c: any) => s + (c.unreadCount || 0), 0)
+        setTotalUnread(count)
+      }).catch(() => {})
+
+    // Real-time: increment when new DM arrives
+    const handleNewDM = () => {
+      setTotalUnread(prev => prev + 1)
+    }
+
+    // Real-time: increment when new group message arrives (via notification)
+    const handleNewGroupMsg = () => {
+      setTotalUnread(prev => prev + 1)
+    }
+
+    socket.on('dm:new', handleNewDM)
+    socket.on('new-group-notification', handleNewGroupMsg)
+
+    // When user navigates to /home reset count (they'll see messages)
+    if (pathname === '/home' || pathname === '/home/') {
+      setTotalUnread(0)
+    }
+
+    return () => {
+      socket.off('dm:new', handleNewDM)
+      socket.off('new-group-notification', handleNewGroupMsg)
+    }
+  }, [user?.id, pathname])
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -150,6 +202,7 @@ export default function AppShell({ children, title, showTopBar = true }: AppShel
             active={isChat && !isOnboarding}
             onClick={() => router.push('/home')}
             locked={isOnboarding}
+            badge={!isChat && totalUnread > 0 ? totalUnread : 0}
           />
           <NavItem
             icon={<Megaphone style={{ width: 18, height: 18 }} />}

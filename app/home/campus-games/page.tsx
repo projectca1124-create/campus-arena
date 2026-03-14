@@ -396,7 +396,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
               {game.hLines.map((row,r)=>row.map((val,c)=>{
                 const h=!val&&hov?.t==='h'&&hov.r===r&&hov.c===c,can=!val&&myTurn&&!done
                 const isBotNew=lastBotLine?.t==='h'&&lastBotLine.r===r&&lastBotLine.c===c
-                const myColor=bps[game.turn]?.color??'#6366f1'
+                const myColor=bps[game.turn-1]?.color??'#6366f1'
                 const bg=val?(bps[val-1]?.color??'#6366f1'):h?myColor:'#c8ccd4'
                 return <div key={`hl${r}${c}`} onMouseEnter={()=>can&&setHov({t:'h',r,c})} onMouseLeave={()=>setHov(null)} onClick={()=>can&&onLine('h',r,c)} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+LW,top:DOT/2+r*(CELL+LW)+(DOT-LW)/2-7,width:CELL,height:14+LW,cursor:can?'pointer':'default',zIndex:10,display:'flex',alignItems:'center'}}>
                   <div className="hl" style={{width:'100%',height:LW,borderRadius:LW,background:bg,
@@ -410,7 +410,7 @@ function Board({game,bps,myTurn,onLine,onBack,status,stColor,done,reactions,onRe
               {game.vLines.map((row,r)=>row.map((val,c)=>{
                 const h=!val&&hov?.t==='v'&&hov.r===r&&hov.c===c,can=!val&&myTurn&&!done
                 const isBotNew=lastBotLine?.t==='v'&&lastBotLine.r===r&&lastBotLine.c===c
-                const myColorV=bps[game.turn]?.color??'#6366f1'
+                const myColorV=bps[game.turn-1]?.color??'#6366f1'
                 const bg=val?(bps[val-1]?.color??'#6366f1'):h?myColorV:'#c8ccd4'
                 return <div key={`vl${r}${c}`} onMouseEnter={()=>can&&setHov({t:'v',r,c})} onMouseLeave={()=>setHov(null)} onClick={()=>can&&onLine('v',r,c)} style={{position:'absolute',left:DOT/2+c*(CELL+LW)+(DOT-LW)/2-7,top:DOT/2+r*(CELL+LW)+LW,width:14+LW,height:CELL,cursor:can?'pointer':'default',zIndex:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
                   <div className="hl" style={{width:LW,height:'100%',borderRadius:LW,background:bg,
