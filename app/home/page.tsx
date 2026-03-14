@@ -898,11 +898,36 @@ export default function HomePage() {
 
   const handleReaction = async (messageId: string, emoji: string) => {
     if (!user || !selectedChat) return; setShowEmojiPicker(null)
+    // Optimistic update for sender — they see reaction immediately
+    setMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m
+      const reactions = m.reactions || []
+      const exists = reactions.find(r => r.userId === user.id && r.emoji === emoji)
+      if (exists) {
+        return { ...m, reactions: reactions.filter(r => !(r.userId === user.id && r.emoji === emoji)) }
+      } else {
+        return { ...m, reactions: [...reactions, { id: `temp_${Date.now()}`, emoji, messageId, userId: user.id, user: { id: user.id, firstName: user.firstName, lastName: user.lastName } }] }
+      }
+    }))
+    // Then sync with server — server broadcasts authoritative reactions to whole group
     const socket = getSocket()
     socket.emit('group:message:react', { messageId, emoji, groupId: selectedChat.id })
   }
+
   const handleDMReaction = async (messageId: string, emoji: string) => {
     if (!user || !selectedDM) return; setShowEmojiPicker(null)
+    // Optimistic update for sender — they see reaction immediately
+    setDmMessages(prev => prev.map(m => {
+      if (m.id !== messageId) return m
+      const reactions = m.reactions || []
+      const exists = reactions.find(r => r.userId === user.id && r.emoji === emoji)
+      if (exists) {
+        return { ...m, reactions: reactions.filter(r => !(r.userId === user.id && r.emoji === emoji)) }
+      } else {
+        return { ...m, reactions: [...reactions, { id: `temp_${Date.now()}`, emoji, messageId, userId: user.id, user: { id: user.id, firstName: user.firstName, lastName: user.lastName } }] }
+      }
+    }))
+    // Then sync with server — server sends back authoritative reactions
     const socket = getSocket()
     socket.emit('dm:react', { messageId, emoji, receiverId: selectedDM.user.id })
   }

@@ -16,8 +16,6 @@ interface SignUpTabProps {
 
 type SignUpStep = 1 | 2 | 3
 
-
-
 interface SignUpData {
   email: string
   password: string
@@ -30,19 +28,20 @@ interface SignUpData {
   profileImage?: string
 }
 
-export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete }: SignUpTabProps)  {
+// Matches: .edu | .ac.in | .edu.in | .ac.uk | .edu.au
+const VALID_EDU_PATTERN = /^[^\s@]+@[^\s@]+\.(edu|ac\.in|edu\.in|ac\.uk|edu\.au)$/i
+
+export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete }: SignUpTabProps) {
   const [currentStep, setCurrentStep] = useState<SignUpStep>(1)
   const [signUpData, setSignUpData] = useState<Partial<SignUpData>>({})
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Helper to update step and notify parent
   const updateStep = (step: SignUpStep) => {
     setCurrentStep(step)
     onStepChange?.(step)
   }
 
-  // Step 1: Email Entry & OTP Generation
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -50,29 +49,24 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
     const email = signUpData.email || ''
     const trimmedEmail = email.trim().toLowerCase()
 
-    // Validate email format
-    const eduEmailRegex = /^[^\s@]+@([^\s@]+\.)*[^\s@]+\.edu$/
-    if (!eduEmailRegex.test(trimmedEmail)) {
-      setError('Please use your university email (must end in .edu)')
+    // ── Validate: .edu, .ac.in, .edu.in, .ac.uk, .edu.au ──
+    if (!VALID_EDU_PATTERN.test(trimmedEmail)) {
+      setError('Please use your university email (.edu, .ac.in, .edu.in, .ac.uk, .edu.au)')
       return
     }
 
     setIsLoading(true)
 
     try {
-      // FIRST:Check if
       console.log('🔍 Checking if account exists for:', trimmedEmail)
       const checkResponse = await fetch('/api/auth/check-email', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: trimmedEmail }),
       })
 
       const checkData = await checkResponse.json()
 
-      // If account exists, show error
       if (checkData.exists) {
         console.log('❌ Account already exists')
         setError('An account with this email already exists. Please log in instead.')
@@ -82,16 +76,10 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
 
       console.log('✅ Account does not exist, sending OTP...')
 
-      // SECOND: Send OTP if account doesn't exist
       const response = await fetch('/api/auth/send-otp', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: trimmedEmail,
-          authType: 'signup',
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, authType: 'signup' }),
       })
 
       const data = await response.json()
@@ -101,8 +89,6 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
       }
 
       console.log('📧 OTP sent successfully')
-
-      // OTP sent successfully, move to step 2
       setSignUpData({ ...signUpData, email: trimmedEmail })
       updateStep(2)
     } catch (err) {
@@ -114,31 +100,14 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
     }
   }
 
-  // Step 2: OTP Verification - move to step 3
-  const handleOTPVerifySuccess = () => {
-    updateStep(3)
-    setError('')
-  }
-
-  // Step 2: Change Email - go back to step 1
-  const handleChangeEmail = () => {
-    updateStep(1)
-    setError('')
-  }
-
-  // Step 3: Password Creation - move to step 4
-  // Step 3: Password Creation - account created, show splash
+  const handleOTPVerifySuccess = () => { updateStep(3); setError('') }
+  const handleChangeEmail = () => { updateStep(1); setError('') }
   const handlePasswordSuccess = (password: string) => {
     setSignUpData({ ...signUpData, password })
     setError('')
-    // Trigger splash screen in parent
     onSignupComplete?.(signUpData.email || '')
   }
 
-  // Step 4: Profile Info - Account creation complete
-  
-
-  // Render Step 1: Email Entry
   if (currentStep === 1) {
     return (
       <div className="bg-white rounded-2xl p-8 shadow-lg">
@@ -157,7 +126,6 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
 
         {/* Form */}
         <form onSubmit={handleEmailSubmit} className="space-y-6">
-          {/* Email Input */}
           <div>
             <label className="block text-sm font-semibold text-gray-900 mb-2">
               University Email
@@ -179,26 +147,17 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
             />
             {error && (
               <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                <svg
-                  className="w-4 h-4"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                    clipRule="evenodd"
-                  />
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                 </svg>
                 {error}
               </p>
             )}
             <p className="mt-2 text-xs text-gray-500">
-              ✓ Must be your official .edu email address
+              ✓ Supports .edu, .ac.in, .edu.in, .ac.uk, .edu.au
             </p>
           </div>
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading || !signUpData.email}
@@ -208,30 +167,21 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
           </button>
         </form>
 
-        {/* Divider */}
         <div className="my-6 relative">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-gray-200"></div>
           </div>
         </div>
 
-        {/* Toggle Link */}
         <p className="text-center text-gray-600">
           Already have an account?{' '}
-          <button
-            onClick={() => onTabChange('login')}
-            className="text-blue-600 hover:text-blue-700 font-semibold"
-          >
+          <button onClick={() => onTabChange('login')} className="text-blue-600 hover:text-blue-700 font-semibold">
             Log in
           </button>
         </p>
 
-        {/* Back to Home */}
         <div className="text-center mt-6">
-          <a
-            href="/"
-            className="text-gray-600 hover:text-gray-900 font-medium inline-flex items-center gap-2"
-          >
+          <a href="/" className="text-gray-600 hover:text-gray-900 font-medium inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
             Back to home
           </a>
@@ -240,7 +190,6 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
     )
   }
 
-  // Render Step 2: OTP Verification
   if (currentStep === 2) {
     return (
       <VerifyOTPStep
@@ -251,7 +200,6 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
     )
   }
 
-  // Render Step 3: Create Password
   if (currentStep === 3) {
     return (
       <CreatePasswordStep
@@ -260,9 +208,6 @@ export default function SignUpTab({ onTabChange, onStepChange, onSignupComplete 
       />
     )
   }
-
-  // Render Step 4: Profile Information
-  
 
   return null
 }

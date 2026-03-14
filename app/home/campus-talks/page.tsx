@@ -4,9 +4,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Search, Plus, Megaphone, Loader2, MessageCircle,
-  ArrowLeft, X, Link2, ChevronDown, Clock, CheckCircle2, Send,
-  TrendingUp, HelpCircle, Flame, MoreVertical, Trash2, Pencil,
-  Share2, Check,
+  ArrowLeft, X, ChevronDown, Send,
+  MoreVertical, Trash2, Pencil, Share2, Check,
 } from 'lucide-react'
 import ProfileViewModal from '@/components/ProfileViewModal'
 
@@ -26,50 +25,77 @@ interface TalkResponse {
   user: { id: string; firstName: string; lastName: string; profileImage?: string; major?: string; year?: string; academicStanding?: string }
 }
 
-// ─── Category config ─────────────────────────────────────────────
-const categoryConfig: Record<string, { bg: string; text: string; border: string; icon: string; accent: string }> = {
-  'Campus Life': { bg: 'bg-rose-50', text: 'text-rose-600', border: 'border-rose-200', icon: '🏫', accent: '#f43f5e' },
-  'Academics':   { bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200', icon: '📚', accent: '#10b981' },
-  'Research':    { bg: 'bg-cyan-50', text: 'text-cyan-600', border: 'border-cyan-200', icon: '🔬', accent: '#06b6d4' },
-  'Housing':     { bg: 'bg-amber-50', text: 'text-amber-600', border: 'border-amber-200', icon: '🏠', accent: '#f59e0b' },
-  'Career':      { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200', icon: '💼', accent: '#3b82f6' },
-  'Social':      { bg: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-200', icon: '🎉', accent: '#8b5cf6' },
-  'General':     { bg: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-200', icon: '💬', accent: '#64748b' },
+// ─── Category colors — exact Base44 style ────────────────────────
+const categoryColors: Record<string, { bg: string; text: string; icon: string }> = {
+  'Campus Life': { bg: '#f5f3ff', text: '#7c3aed', icon: '🏫' },
+  'Academics':   { bg: '#eff6ff', text: '#2563eb', icon: '📚' },
+  'Research':    { bg: '#f0fdf4', text: '#16a34a', icon: '🔬' },
+  'Housing':     { bg: '#fff7ed', text: '#ea580c', icon: '🏠' },
+  'Career':      { bg: '#fdf2f8', text: '#db2777', icon: '💼' },
+  'Social':      { bg: '#fefce8', text: '#ca8a04', icon: '🎉' },
+  'General':     { bg: '#f8fafc', text: '#475569', icon: '💬' },
 }
-function getCat(cat: string) { return categoryConfig[cat] || categoryConfig['General'] }
+function getCat(cat: string) { return categoryColors[cat] || categoryColors['General'] }
+
+function CategoryBadge({ category }: { category: string }) {
+  const c = getCat(category)
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      fontSize: 12, fontWeight: 600,
+      color: c.text, background: c.bg,
+      padding: '4px 10px', borderRadius: 6,
+    }}>
+      {c.icon} {category}
+    </span>
+  )
+}
 
 // ─── Avatar ──────────────────────────────────────────────────────
-function UserAvatar({ src, firstName, lastName, size = 36, className = '', onClick }: {
-  src?: string | null; firstName?: string; lastName?: string; size?: number; className?: string; onClick?: () => void
+function UserAvatar({ src, firstName, lastName, size = 36, onClick }: {
+  src?: string | null; firstName?: string; lastName?: string; size?: number; onClick?: () => void
 }) {
   const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`
-  const clickClass = onClick ? 'cursor-pointer hover:ring-2 hover:ring-indigo-300 transition-all' : ''
-  if (src) return <img src={src} alt="" onClick={onClick} className={`rounded-full object-cover flex-shrink-0 ${clickClass} ${className}`} style={{ width: size, height: size }} />
+  const s: React.CSSProperties = { width: size, height: size, borderRadius: '50%', flexShrink: 0, cursor: onClick ? 'pointer' : 'default' }
+  if (src) return <img src={src} alt="" onClick={onClick} style={{ ...s, objectFit: 'cover' }} />
   return (
-    <div onClick={onClick} className={`rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold flex-shrink-0 ${clickClass} ${className}`}
-      style={{ width: size, height: size, fontSize: size * 0.35 }}>{initials}</div>
+    <div onClick={onClick} style={{ ...s, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600, fontSize: size * 0.36 }}>
+      {initials}
+    </div>
   )
 }
 
 function timeAgo(dateStr: string) {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (seconds < 60) return 'just now'
-  const m = Math.floor(seconds / 60); if (m < 60) return `${m} minute${m > 1 ? 's' : ''} ago`
-  const h = Math.floor(m / 60); if (h < 24) return `${h} hour${h > 1 ? 's' : ''} ago`
-  const d = Math.floor(h / 24); if (d < 7) return `${d} day${d > 1 ? 's' : ''} ago`
+  const s = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24); if (d < 7) return `${d}d ago`
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 const DEFAULT_CATEGORIES = ['Campus Life', 'Academics', 'Research', 'Housing', 'Career', 'Social', 'General']
-
 const TABS = [
-  { key: 'all' as const, label: 'All Discussions' },
+  { key: 'all' as const,        label: 'All Discussions' },
   { key: 'unanswered' as const, label: 'Unanswered' },
-  { key: 'my' as const, label: 'My Questions' },
-  { key: 'answered' as const, label: 'My Responses' },
+  { key: 'my' as const,         label: 'My Questions' },
+  { key: 'answered' as const,   label: 'My Responses' },
 ]
 
-// ─── Main ────────────────────────────────────────────────────────
+// ─── Shared button styles ─────────────────────────────────────────
+const btnPrimary: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 7,
+  padding: '9px 20px', background: '#4f46e5', color: 'white',
+  border: 'none', borderRadius: 8, cursor: 'pointer',
+  fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+}
+const btnGhost: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+  padding: '6px 12px', background: 'none', color: '#6b7280',
+  border: 'none', borderRadius: 8, cursor: 'pointer',
+  fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+}
+
 export default function CampusTalksPage() {
   const router = useRouter()
   const responseEndRef = useRef<HTMLDivElement>(null)
@@ -97,12 +123,10 @@ export default function CampusTalksPage() {
   const [copiedLink, setCopiedLink] = useState(false)
   const [profileViewUserId, setProfileViewUserId] = useState<string | null>(null)
 
-  // Menu states
   const [cardMenuId, setCardMenuId] = useState<string | null>(null)
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
   const [responseMenuId, setResponseMenuId] = useState<string | null>(null)
 
-  // Edit states
   const [editingQuestion, setEditingQuestion] = useState<CampusTalk | null>(null)
   const [editQuestionForm, setEditQuestionForm] = useState({ title: '', content: '', category: 'General' })
   const [isSavingEdit, setIsSavingEdit] = useState(false)
@@ -112,8 +136,7 @@ export default function CampusTalksPage() {
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (target.closest('[data-menu]')) return
+      if ((e.target as HTMLElement).closest('[data-menu]')) return
       setCardMenuId(null); setThreadMenuOpen(false); setResponseMenuId(null)
     }
     document.addEventListener('mousedown', handler)
@@ -123,22 +146,21 @@ export default function CampusTalksPage() {
   useEffect(() => {
     const userStr = localStorage.getItem('user')
     if (!userStr) { router.push('/auth'); return }
-    const currentUser = JSON.parse(userStr) as User
-    setUser(currentUser)
+    const u = JSON.parse(userStr) as User
+    setUser(u)
     const urlParams = new URLSearchParams(window.location.search)
     const tabParam = urlParams.get('tab')
-    const viewUserId = urlParams.get('userId')
-    const targetUserId = viewUserId || currentUser.id
     if (tabParam === 'my' || tabParam === 'unanswered' || tabParam === 'answered') {
-      setActiveTab(tabParam); loadTalks(targetUserId, '', '', tabParam)
-    } else { loadTalks(currentUser.id, '', '', 'all') }
+      setActiveTab(tabParam); loadTalks(u.id, '', '', tabParam)
+    } else { loadTalks(u.id, '', '', 'all') }
   }, [router])
 
   const loadTalks = async (userId: string, search: string, category: string, tab: string) => {
     setIsLoading(true)
     try {
       const params = new URLSearchParams({ userId, tab })
-      if (search) params.set('search', search); if (category) params.set('category', category)
+      if (search) params.set('search', search)
+      if (category) params.set('category', category)
       const res = await fetch(`/api/campus-talks?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -146,7 +168,7 @@ export default function CampusTalksPage() {
         if (data.categories?.length > 0) setCategories([...new Set([...DEFAULT_CATEGORIES, ...data.categories])])
         if (typeof data.unansweredCount === 'number') setUnansweredCount(data.unansweredCount)
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setIsLoading(false) }
   }
 
@@ -156,49 +178,32 @@ export default function CampusTalksPage() {
     return () => clearTimeout(t)
   }, [searchQuery, categoryFilter, activeTab])
 
-  // ── Auto-open thread from notification link (?thread=talkId) ──
-  // Runs once when user is loaded. Fetches the talk directly by ID so it
-  // works regardless of which tab is active or what's currently loaded.
   useEffect(() => {
     if (!user) return
     const params = new URLSearchParams(window.location.search)
     const threadId = params.get('thread')
     if (!threadId) return
-
-    // Clean URL immediately
     window.history.replaceState({}, '', '/home/campus-talks')
-
-    // Try already-loaded talks first (instant)
     const match = talks.find(t => t.id === threadId)
-    if (match) {
-      openDiscussion(match)
-      return
-    }
-
-    // Fetch the specific talk by ID directly — works even if it's on a
-    // different tab (e.g. "My Questions") or filtered out
+    if (match) { openDiscussion(match); return }
     fetch(`/api/campus-talks/${threadId}`)
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.talk) openDiscussion(data.talk)
-      })
+      .then(data => { if (data?.talk) openDiscussion(data.talk) })
       .catch(() => {})
-  }, [user]) // intentionally only depends on user, not talks
+  }, [user])
 
   const handleAskQuestion = async () => {
-    const errors: Record<string, string> = {}; if (!askForm.title.trim()) errors.title = 'Question is required.'
+    const errors: Record<string, string> = {}
+    if (!askForm.title.trim()) errors.title = 'Question is required.'
     setAskErrors(errors); if (Object.keys(errors).length > 0) return; setIsPosting(true)
     try {
       const res = await fetch('/api/campus-talks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...askForm, userId: user?.id }) })
       if (res.ok) {
-        setShowAskModal(false)
-        setAskForm({ title: '', content: '', category: 'General' })
-        setAskErrors({})
-        setActiveTab('unanswered')
-        setUnansweredCount(prev => prev + 1)
+        setShowAskModal(false); setAskForm({ title: '', content: '', category: 'General' }); setAskErrors({})
+        setActiveTab('unanswered'); setUnansweredCount(prev => prev + 1)
         if (user) loadTalks(user.id, searchQuery, categoryFilter, 'unanswered')
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setIsPosting(false) }
   }
 
@@ -207,13 +212,14 @@ export default function CampusTalksPage() {
     try {
       const res = await fetch(`/api/campus-talks/${talk.id}/responses`)
       if (res.ok) { const data = await res.json(); setResponses((data.responses || []).reverse()) }
-    }
-    catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setIsLoadingResponses(false) }
   }
 
   const handleSendResponse = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!newResponse.trim() || !selectedTalk || !user) return; setIsSendingResponse(true)
+    e.preventDefault()
+    if (!newResponse.trim() || !selectedTalk || !user) return
+    setIsSendingResponse(true)
     try {
       const res = await fetch(`/api/campus-talks/${selectedTalk.id}/responses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: newResponse, userId: user.id }) })
       if (res.ok) {
@@ -227,12 +233,12 @@ export default function CampusTalksPage() {
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
         setTimeout(() => responseEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setIsSendingResponse(false) }
   }
 
   const handleDeleteQuestion = async (talkId: string) => {
-    if (!confirm('Delete this question and all its responses? This cannot be undone.')) return
+    if (!confirm('Delete this question and all its responses?')) return
     const talk = talks.find(t => t.id === talkId)
     try {
       const res = await fetch(`/api/campus-talks/${talkId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id }) })
@@ -241,7 +247,7 @@ export default function CampusTalksPage() {
         if (selectedTalk?.id === talkId) { setSelectedTalk(null); setResponses([]) }
         if (talk && talk.responseCount === 0) setUnansweredCount(prev => Math.max(0, prev - 1))
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setCardMenuId(null); setThreadMenuOpen(false) }
   }
 
@@ -255,58 +261,47 @@ export default function CampusTalksPage() {
     if (!editingQuestion || !editQuestionForm.title.trim()) return
     setIsSavingEdit(true)
     try {
-      const res = await fetch(`/api/campus-talks/${editingQuestion.id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id, title: editQuestionForm.title, content: editQuestionForm.content, category: editQuestionForm.category })
-      })
+      const res = await fetch(`/api/campus-talks/${editingQuestion.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id, ...editQuestionForm }) })
       if (res.ok) {
         const data = await res.json()
         const updated = data.talk || { ...editingQuestion, ...editQuestionForm }
-        setTalks(prev => prev.map(t => t.id === editingQuestion.id ? { ...t, title: updated.title, content: updated.content, category: updated.category } : t))
-        if (selectedTalk?.id === editingQuestion.id) {
-          setSelectedTalk(prev => prev ? { ...prev, title: updated.title, content: updated.content, category: updated.category } : null)
-        }
+        setTalks(prev => prev.map(t => t.id === editingQuestion.id ? { ...t, ...updated } : t))
+        if (selectedTalk?.id === editingQuestion.id) setSelectedTalk(prev => prev ? { ...prev, ...updated } : null)
         setEditingQuestion(null)
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setIsSavingEdit(false) }
   }
 
   const handleDeleteResponse = async (responseId: string) => {
-    if (!confirm('Delete this response?')) return
-    if (!selectedTalk) return
+    if (!confirm('Delete this response?') || !selectedTalk) return
     try {
       const res = await fetch(`/api/campus-talks/${selectedTalk.id}/responses/${responseId}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id }) })
       if (res.ok) {
-        const remainingCount = responses.filter(r => r.id !== responseId).length
+        const remaining = responses.filter(r => r.id !== responseId).length
         setResponses(prev => prev.filter(r => r.id !== responseId))
         setTalks(prev => prev.map(t => t.id === selectedTalk.id ? { ...t, responseCount: Math.max(0, t.responseCount - 1) } : t))
         setSelectedTalk(prev => prev ? { ...prev, responseCount: Math.max(0, prev.responseCount - 1) } : null)
-        if (remainingCount === 0) setUnansweredCount(prev => prev + 1)
+        if (remaining === 0) setUnansweredCount(prev => prev + 1)
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setResponseMenuId(null) }
   }
 
   const openEditResponse = (r: TalkResponse) => {
-    setEditingResponseId(r.id)
-    setEditResponseContent(r.content)
-    setResponseMenuId(null)
+    setEditingResponseId(r.id); setEditResponseContent(r.content); setResponseMenuId(null)
   }
 
   const handleSaveEditResponse = async () => {
     if (!editingResponseId || !editResponseContent.trim() || !selectedTalk) return
     setIsSavingResponseEdit(true)
     try {
-      const res = await fetch(`/api/campus-talks/${selectedTalk.id}/responses/${editingResponseId}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id, content: editResponseContent })
-      })
+      const res = await fetch(`/api/campus-talks/${selectedTalk.id}/responses/${editingResponseId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user?.id, content: editResponseContent }) })
       if (res.ok) {
         setResponses(prev => prev.map(r => r.id === editingResponseId ? { ...r, content: editResponseContent } : r))
         setEditingResponseId(null); setEditResponseContent('')
       }
-    } catch (err) { console.error('Error:', err) }
+    } catch (err) { console.error(err) }
     finally { setIsSavingResponseEdit(false) }
   }
 
@@ -316,311 +311,420 @@ export default function CampusTalksPage() {
       .then(() => { setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000) })
   }
 
-  const activeTabIndex = TABS.findIndex(t => t.key === activeTab)
+  // ── Dropdown menu item style ──────────────────────────────────────
+  const menuItem = (color = '#111827'): React.CSSProperties => ({
+    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+    padding: '9px 14px', fontSize: 13, color,
+    background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+    fontFamily: 'inherit',
+  })
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* ━━━━━━ THREAD DETAIL VIEW ━━━━━━ */}
-      {selectedTalk ? (
-        <div className="flex flex-col h-full">
-          <div className="flex-shrink-0 bg-white border-b border-gray-200">
-            <div className="h-[3px]" style={{ background: getCat(selectedTalk.category).accent }} />
-            <div className="px-8 py-4">
-              <button onClick={() => { setSelectedTalk(null); setResponses([]) }}
-                className="inline-flex items-center gap-1.5 text-[13px] text-gray-500 hover:text-gray-900 font-medium transition-colors mb-4">
-                <ArrowLeft className="w-4 h-4" /> Back to discussions
-              </button>
-              <div className="flex items-start gap-4">
-                <UserAvatar src={selectedTalk.user.profileImage} firstName={selectedTalk.user.firstName} lastName={selectedTalk.user.lastName} size={44}
-                  className="mt-0.5 flex-shrink-0" onClick={() => setProfileViewUserId(selectedTalk.user.id)} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="text-[13px] font-bold text-gray-900">{selectedTalk.user.firstName} {selectedTalk.user.lastName}</span>
-                    <span className="text-[11px] text-gray-400">{timeAgo(selectedTalk.createdAt)}</span>
-                    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${getCat(selectedTalk.category).bg} ${getCat(selectedTalk.category).text} ${getCat(selectedTalk.category).border}`}>
-                      {getCat(selectedTalk.category).icon} {selectedTalk.category}
-                    </span>
-                  </div>
-                  <h2 className="text-[17px] font-bold text-gray-900 leading-snug">{selectedTalk.title}</h2>
-                  {selectedTalk.content && <p className="text-[13px] text-gray-500 leading-relaxed mt-1">{selectedTalk.content}</p>}
-                  <div className="flex items-center gap-1.5 mt-2 text-[12px] text-gray-400">
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    <span>{responses.length} response{responses.length !== 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-                <div className="flex-shrink-0 relative" data-menu>
-                  <button onClick={e => { e.stopPropagation(); e.preventDefault(); setThreadMenuOpen(prev => !prev); setCardMenuId(null); setResponseMenuId(null) }}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all">
-                    <MoreVertical className="w-[18px] h-[18px]" />
-                  </button>
-                  {threadMenuOpen && (
-                    <div className="absolute top-9 right-0 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-48 z-20" data-menu>
-                      <button onClick={copyThreadLink}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                        {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4 text-gray-400" />}
-                        <span>{copiedLink ? 'Link Copied!' : 'Share Thread'}</span>
+  // ══════════════════════════════════════════════════════════════
+  // THREAD DETAIL — original layout, fixed reply bar at bottom
+  // ══════════════════════════════════════════════════════════════
+  if (selectedTalk) return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f9fafb' }}>
+
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: '24px 32px' }}>
+
+          {/* Back button */}
+          <button onClick={() => { setSelectedTalk(null); setResponses([]) }}
+            style={{ ...btnGhost, marginBottom: 20, paddingLeft: 0 }}>
+            <ArrowLeft size={15} /> Back to discussions
+          </button>
+
+          {/* Question card — white rounded like Base44 */}
+          <div style={{ background: 'white', borderRadius: 16, border: '1px solid #f3f4f6', padding: '24px', marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+              <CategoryBadge category={selectedTalk.category} />
+              <div style={{ position: 'relative' }} data-menu>
+                <button onClick={e => { e.stopPropagation(); setThreadMenuOpen(p => !p) }}
+                  style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+                  <MoreVertical size={16} />
+                </button>
+                {threadMenuOpen && (
+                  <div style={{ position: 'absolute', top: 32, right: 0, background: 'white', border: '1px solid #f3f4f6', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.08)', padding: '4px 0', width: 172, zIndex: 20 }} data-menu>
+                    <button onClick={copyThreadLink} style={menuItem()}
+                      onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                      {copiedLink ? <Check size={14} color="#22c55e" /> : <Share2 size={14} color="#9ca3af" />}
+                      {copiedLink ? 'Copied!' : 'Share Thread'}
+                    </button>
+                    {selectedTalk.userId === user?.id && <>
+                      <button onClick={() => openEditQuestion(selectedTalk)} style={menuItem()}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        <Pencil size={14} color="#9ca3af" /> Edit Question
                       </button>
-                      {selectedTalk.userId === user?.id && (
-                        <>
-                          <button onClick={() => openEditQuestion(selectedTalk)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                            <Pencil className="w-4 h-4 text-gray-400" /><span>Edit Question</span>
-                          </button>
-                          <div className="mx-3 my-1 border-t border-gray-100"></div>
-                          <button onClick={() => handleDeleteQuestion(selectedTalk.id)}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                            <Trash2 className="w-4 h-4" /><span>Delete Question</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                      <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 10px' }} />
+                      <button onClick={() => handleDeleteQuestion(selectedTalk.id)} style={menuItem('#ef4444')}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                        <Trash2 size={14} /> Delete
+                      </button>
+                    </>}
+                  </div>
+                )}
               </div>
+            </div>
+
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: '0 0 10px', lineHeight: 1.35 }}>
+              {selectedTalk.title}
+            </h1>
+            {selectedTalk.content && (
+              <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.65, margin: '0 0 16px' }}>
+                {selectedTalk.content}
+              </p>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#6b7280' }}>
+              <UserAvatar src={selectedTalk.user.profileImage} firstName={selectedTalk.user.firstName}
+                lastName={selectedTalk.user.lastName} size={24} onClick={() => setProfileViewUserId(selectedTalk.user.id)} />
+              <span>By <strong style={{ color: '#374151', fontWeight: 600 }}>{selectedTalk.user.firstName} {selectedTalk.user.lastName}</strong></span>
+              <span>·</span>
+              <span>{timeAgo(selectedTalk.createdAt)}</span>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto bg-gray-50">
-            <div className="px-8 py-5">
-              <p className="text-[13px] font-bold text-gray-900 mb-4">{responses.length} Response{responses.length !== 1 ? 's' : ''}</p>
-              {isLoadingResponses ? (
-                <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 text-indigo-400 animate-spin" /></div>
-              ) : responses.length > 0 ? (
-                <div className="space-y-3">
-                  {responses.map(r => (
-                    <div key={r.id} className="bg-white border border-gray-200 rounded-xl px-5 py-4 relative group/resp hover:border-gray-300 transition-all">
-                      {editingResponseId === r.id ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <UserAvatar src={r.user.profileImage} firstName={r.user.firstName} lastName={r.user.lastName} size={34} />
-                            <span className="text-[13px] font-bold text-gray-900">{r.user.firstName} {r.user.lastName}</span>
-                            <span className="text-[11px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded font-medium">Editing</span>
-                          </div>
-                          <textarea value={editResponseContent} onChange={e => setEditResponseContent(e.target.value)}
-                            rows={3} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
-                          <div className="flex justify-end gap-2">
-                            <button onClick={() => { setEditingResponseId(null); setEditResponseContent('') }}
-                              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors">Cancel</button>
-                            <button onClick={handleSaveEditResponse} disabled={isSavingResponseEdit || !editResponseContent.trim()}
-                              className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-1.5">
-                              {isSavingResponseEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Save
-                            </button>
-                          </div>
+          {/* Responses */}
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>
+            {responses.length} Response{responses.length !== 1 ? 's' : ''}
+          </h3>
+
+          {isLoadingResponses ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+              <Loader2 size={20} color="#d1d5db" style={{ animation: 'spin 1s linear infinite' }} />
+            </div>
+          ) : responses.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
+              {responses.map(r => (
+                <div key={r.id} style={{ background: 'white', borderRadius: 16, border: '1px solid #f3f4f6', padding: '20px' }}>
+                  {editingResponseId === r.id ? (
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                        <UserAvatar src={r.user.profileImage} firstName={r.user.firstName} lastName={r.user.lastName} size={30} />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{r.user.firstName} {r.user.lastName}</span>
+                        <span style={{ fontSize: 11, color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: 6, fontWeight: 600 }}>Editing</span>
+                      </div>
+                      <textarea value={editResponseContent} onChange={e => setEditResponseContent(e.target.value)}
+                        rows={3} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 10, fontSize: 13, outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+                        <button onClick={() => { setEditingResponseId(null); setEditResponseContent('') }}
+                          style={{ padding: '7px 14px', fontSize: 13, color: '#6b7280', background: 'none', border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                        <button onClick={handleSaveEditResponse} disabled={isSavingResponseEdit || !editResponseContent.trim()}
+                          style={{ padding: '7px 14px', fontSize: 13, color: 'white', background: '#4f46e5', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'inherit', opacity: isSavingResponseEdit || !editResponseContent.trim() ? 0.5 : 1 }}>
+                          {isSavingResponseEdit ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={13} />} Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <UserAvatar src={r.user.profileImage} firstName={r.user.firstName} lastName={r.user.lastName}
+                        size={38} onClick={() => setProfileViewUserId(r.user.id)} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{r.user.firstName} {r.user.lastName}</span>
+                          {r.user.academicStanding && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: '#4f46e5', background: '#eef2ff', padding: '2px 8px', borderRadius: 6 }}>{r.user.academicStanding}</span>
+                          )}
+                          <span style={{ fontSize: 12, color: '#9ca3af' }}>{timeAgo(r.createdAt)}</span>
                         </div>
-                      ) : (
-                        <div className="flex items-start gap-3">
-                          <UserAvatar src={r.user.profileImage} firstName={r.user.firstName} lastName={r.user.lastName} size={38}
-                            className="mt-0.5 flex-shrink-0" onClick={() => setProfileViewUserId(r.user.id)} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className="text-[13px] font-bold text-gray-900">{r.user.firstName} {r.user.lastName}</span>
-                              {r.user.academicStanding && (
-                                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">{r.user.academicStanding}</span>
-                              )}
-                              <span className="text-[11px] text-gray-400">{timeAgo(r.createdAt)}</span>
-                            </div>
-                            <p className="text-[13px] text-gray-700 leading-relaxed">{r.content}</p>
-                          </div>
-                          {r.user.id === user?.id && (
-                            <div className="relative flex-shrink-0" data-menu>
-                              <button onClick={e => { e.stopPropagation(); e.preventDefault(); setResponseMenuId(responseMenuId === r.id ? null : r.id); setCardMenuId(null); setThreadMenuOpen(false) }}
-                                className="p-1 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all opacity-0 group-hover/resp:opacity-100">
-                                <MoreVertical className="w-4 h-4" />
+                        <p style={{ fontSize: 14, color: '#4b5563', lineHeight: 1.65, margin: 0 }}>{r.content}</p>
+                      </div>
+                      {r.user.id === user?.id && (
+                        <div style={{ position: 'relative', flexShrink: 0 }} data-menu>
+                          <button onClick={e => { e.stopPropagation(); setResponseMenuId(responseMenuId === r.id ? null : r.id) }}
+                            style={{ padding: 5, borderRadius: 7, background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db' }}>
+                            <MoreVertical size={15} />
+                          </button>
+                          {responseMenuId === r.id && (
+                            <div style={{ position: 'absolute', top: 28, right: 0, background: 'white', border: '1px solid #f3f4f6', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.08)', padding: '4px 0', width: 150, zIndex: 20 }} data-menu>
+                              <button onClick={() => openEditResponse(r)} style={menuItem()}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                                <Pencil size={13} color="#9ca3af" /> Edit
                               </button>
-                              {responseMenuId === r.id && (
-                                <div className="absolute top-7 right-0 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-44 z-20" data-menu>
-                                  <button onClick={() => openEditResponse(r)}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                                    <Pencil className="w-4 h-4 text-gray-400" /><span>Edit Response</span>
-                                  </button>
-                                  <div className="mx-3 my-1 border-t border-gray-100"></div>
-                                  <button onClick={() => handleDeleteResponse(r.id)}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                    <Trash2 className="w-4 h-4" /><span>Delete Response</span>
-                                  </button>
-                                </div>
-                              )}
+                              <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 10px' }} />
+                              <button onClick={() => handleDeleteResponse(r.id)} style={menuItem('#ef4444')}
+                                onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                                <Trash2 size={13} /> Delete
+                              </button>
                             </div>
                           )}
                         </div>
                       )}
                     </div>
-                  ))}
-                  <div ref={responseEndRef} />
-                </div>
-              ) : (
-                <div className="py-16 text-center">
-                  <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <MessageCircle className="w-6 h-6 text-gray-300" />
-                  </div>
-                  <p className="text-sm font-semibold text-gray-500">No responses yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Be the first to share your thoughts!</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-shrink-0 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.04)]">
-            <div className="px-8 py-3.5">
-              <form onSubmit={handleSendResponse} className="flex items-end gap-3">
-                <div className="flex-1">
-                  <textarea ref={textareaRef} value={newResponse}
-                    onChange={e => { setNewResponse(e.target.value); if (textareaRef.current) { textareaRef.current.style.height = 'auto'; textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px' } }}
-                    placeholder="Write your response..." rows={1}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 text-[13px] resize-none placeholder-gray-400 bg-gray-50/50 focus:bg-white transition-all leading-relaxed"
-                    style={{ minHeight: 46, maxHeight: 120 }} disabled={isSendingResponse} />
-                </div>
-                <button type="submit" disabled={!newResponse.trim() || isSendingResponse}
-                  className="px-5 py-3 bg-indigo-600 text-white rounded-xl font-semibold text-[13px] hover:bg-indigo-700 transition-all disabled:opacity-40 flex-shrink-0 flex items-center gap-2 shadow-sm shadow-indigo-200">
-                  {isSendingResponse ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Post Response
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-
-      ) : (
-        <div className="h-full overflow-y-auto">
-
-          <div className="px-8 py-5">
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl px-7 py-5 mb-5 text-white relative overflow-hidden">
-              <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/5 rounded-full"></div>
-              <div className="absolute bottom-0 left-1/3 w-32 h-32 bg-white/5 rounded-full translate-y-1/2"></div>
-              <div className="relative z-10 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1"><Flame className="w-5 h-5 text-amber-300" /><h2 className="text-lg font-bold">Seniors on Demand</h2></div>
-                  <p className="text-indigo-200 text-sm">Real talk. Real answers. From seniors who've been there — drop your question, start the convo.</p>
-                </div>
-                <button onClick={() => setShowAskModal(true)} className="px-5 py-2.5 bg-white text-indigo-700 rounded-xl font-bold text-sm hover:bg-indigo-50 transition-all flex items-center gap-2 flex-shrink-0 shadow-lg shadow-indigo-900/20 ml-6"><Plus className="w-4 h-4" /> Ask a Question</button>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" /><input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search discussions..." className="w-full pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all" /></div>
-              <div className="relative"><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="appearance-none pl-4 pr-9 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 cursor-pointer"><option value="">All Categories</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" /></div>
-            </div>
-
-            <div className="relative flex bg-gray-100 rounded-xl p-1 mb-5">
-              <div className="absolute top-1 bottom-1 rounded-lg bg-indigo-600 shadow-md transition-all duration-300 ease-in-out"
-                style={{
-                  width: `calc(${100 / TABS.length}% - ${8 / TABS.length}px)`,
-                  left: `calc(${activeTabIndex * (100 / TABS.length)}% + 4px)`,
-                }} />
-              {TABS.map(tab => (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-semibold rounded-lg transition-colors duration-300 ${
-                    activeTab === tab.key ? 'text-white' : 'text-gray-500 hover:text-gray-700'
-                  }`}>
-                  {tab.label}
-                  {tab.key === 'unanswered' && unansweredCount > 0 && (
-                    <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold transition-colors ${
-                      activeTab === 'unanswered' ? 'bg-white/25 text-white' : 'bg-indigo-100 text-indigo-600'
-                    }`}>
-                      {unansweredCount > 99 ? '99+' : unansweredCount}
-                    </span>
                   )}
-                </button>
+                </div>
+              ))}
+              <div ref={responseEndRef} />
+            </div>
+          ) : (
+            <div style={{ background: 'white', borderRadius: 16, border: '1px solid #f3f4f6', padding: '48px', textAlign: 'center', marginBottom: 24 }}>
+              <div style={{ width: 44, height: 44, background: '#f3f4f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <MessageCircle size={18} color="#d1d5db" />
+              </div>
+              <p style={{ fontSize: 14, fontWeight: 500, color: '#6b7280', margin: '0 0 4px' }}>No responses yet</p>
+              <p style={{ fontSize: 13, color: '#9ca3af', margin: 0 }}>Be the first to share your thoughts!</p>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Reply bar — fixed at bottom, full width */}
+      <div style={{ flexShrink: 0, background: 'white', borderTop: '1px solid #f3f4f6', padding: '12px 32px 16px' }}>
+        <form onSubmit={handleSendResponse} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <textarea ref={textareaRef} value={newResponse}
+            onChange={e => {
+              setNewResponse(e.target.value)
+              if (textareaRef.current) { textareaRef.current.style.height = 'auto'; textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px' }
+            }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (newResponse.trim()) handleSendResponse(e as any) } }}
+            placeholder="Write your response..."
+            rows={1} disabled={isSendingResponse}
+            style={{
+              flex: 1, padding: '12px 16px',
+              border: '1.5px solid #e5e7eb', borderRadius: 12,
+              fontSize: 14, outline: 'none', resize: 'none',
+              fontFamily: 'inherit', background: '#fafafa',
+              minHeight: 46, maxHeight: 120,
+              boxSizing: 'border-box', color: '#374151',
+              transition: 'border-color 0.15s',
+            }}
+            onFocus={e => e.target.style.borderColor = '#6366f1'}
+            onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+          />
+          <button type="submit" disabled={!newResponse.trim() || isSendingResponse}
+            style={{
+              flexShrink: 0, height: 46, padding: '0 24px',
+              background: newResponse.trim() ? '#4f46e5' : '#e5e7eb',
+              color: newResponse.trim() ? 'white' : '#9ca3af',
+              border: 'none', borderRadius: 12,
+              cursor: newResponse.trim() ? 'pointer' : 'default',
+              fontSize: 14, fontWeight: 600,
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontFamily: 'inherit', transition: 'all 0.15s',
+            }}>
+            {isSendingResponse ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={15} />}
+            Post Response
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+
+  // ══════════════════════════════════════════════════════════════
+  // MAIN LIST — bg-gray-50 with white cards, exact Base44 match
+  // ══════════════════════════════════════════════════════════════
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#f9fafb' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: '28px 32px' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 24 }}>🔥</span>
+                <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+                  Seniors on Demand
+                </h2>
+              </div>
+              <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
+                Real talk. Real answers. From seniors who've been there — drop your question, start the convo.
+              </p>
+            </div>
+            <button onClick={() => setShowAskModal(true)} style={{ ...btnPrimary, flexShrink: 0 }}>
+              <Plus size={15} /> Ask a Question
+            </button>
+          </div>
+
+          {/* Search + Filter */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <Search size={15} color="#9ca3af" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search discussions..."
+                style={{ width: '100%', paddingLeft: 36, paddingRight: 14, height: 40, border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, background: 'white', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                onFocus={e => e.target.style.borderColor = '#6366f1'}
+                onBlur={e => e.target.style.borderColor = '#e5e7eb'}
+              />
+            </div>
+            <div style={{ position: 'relative' }}>
+              <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
+                style={{ appearance: 'none', paddingLeft: 14, paddingRight: 32, height: 40, border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, color: '#374151', background: 'white', cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+                <option value="">All Categories</option>
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <ChevronDown size={14} color="#9ca3af" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            </div>
+          </div>
+
+          {/* Tabs — Base44: white bg, border, pill triggers */}
+          <div style={{ marginBottom: 24, display: 'flex', background: 'white', border: '1px solid #f3f4f6', borderRadius: 10, padding: 4, width: 'fit-content', gap: 2 }}>
+            {TABS.map(tab => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                style={{
+                  padding: '7px 16px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                  fontSize: 13, fontWeight: activeTab === tab.key ? 600 : 500,
+                  background: activeTab === tab.key ? '#f3f4f6' : 'transparent',
+                  color: activeTab === tab.key ? '#111827' : '#6b7280',
+                  fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
+                  transition: 'all 0.15s',
+                }}>
+                {tab.label}
+                {tab.key === 'unanswered' && unansweredCount > 0 && (
+                  <span style={{
+                    minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
+                    background: activeTab === 'unanswered' ? '#4f46e5' : '#e5e7eb',
+                    color: activeTab === 'unanswered' ? 'white' : '#6b7280',
+                    fontSize: 10, fontWeight: 700,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {unansweredCount > 99 ? '99+' : unansweredCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Questions list — white rounded cards with hover shadow */}
+          {isLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
+              <Loader2 size={20} color="#d1d5db" style={{ animation: 'spin 1s linear infinite' }} />
+            </div>
+          ) : talks.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {talks.map(talk => (
+                <div key={talk.id}
+                  onClick={() => openDiscussion(talk)}
+                  style={{
+                    background: 'white', borderRadius: 16,
+                    border: '1px solid #f3f4f6',
+                    padding: '20px', cursor: 'pointer',
+                    transition: 'box-shadow 0.2s, border-color 0.2s',
+                  }}
+                  onMouseEnter={e => { const d = e.currentTarget as HTMLDivElement; d.style.boxShadow = '0 4px 20px rgba(0,0,0,0.06)'; d.style.borderColor = '#e0e7ff' }}
+                  onMouseLeave={e => { const d = e.currentTarget as HTMLDivElement; d.style.boxShadow = 'none'; d.style.borderColor = '#f3f4f6' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <CategoryBadge category={talk.category} />
+                    <div style={{ position: 'relative' }} data-menu>
+                      <button onClick={e => { e.stopPropagation(); setCardMenuId(cardMenuId === talk.id ? null : talk.id) }}
+                        style={{ padding: '4px 6px', borderRadius: 7, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
+                        <MoreVertical size={16} />
+                      </button>
+                      {cardMenuId === talk.id && (
+                        <div style={{ position: 'absolute', top: 30, right: 0, background: 'white', border: '1px solid #f3f4f6', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.08)', padding: '4px 0', width: 172, zIndex: 20 }} data-menu>
+                          <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(`${window.location.origin}/home/campus-talks?thread=${talk.id}`); setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); setCardMenuId(null) }}
+                            style={menuItem()}
+                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                            <Share2 size={14} color="#9ca3af" /> Share Thread
+                          </button>
+                          {talk.userId === user?.id && <>
+                            <button onClick={e => { e.stopPropagation(); openEditQuestion(talk) }}
+                              style={menuItem()}
+                              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                              <Pencil size={14} color="#9ca3af" /> Edit
+                            </button>
+                            <div style={{ borderTop: '1px solid #f3f4f6', margin: '4px 10px' }} />
+                            <button onClick={e => { e.stopPropagation(); handleDeleteQuestion(talk.id) }}
+                              style={menuItem('#ef4444')}
+                              onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                              <Trash2 size={14} /> Delete
+                            </button>
+                          </>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: '#111827', margin: '0 0 10px', lineHeight: 1.4 }}>
+                    {talk.title}
+                  </h3>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#6b7280' }}>
+                      <span>By <strong style={{ fontWeight: 500 }}>{talk.user.firstName} {talk.user.lastName}</strong></span>
+                      <span>·</span>
+                      <span>{timeAgo(talk.createdAt)}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#6b7280' }}>
+                      <MessageCircle size={14} />
+                      {talk.responseCount} response{talk.responseCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
-
-            {isLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="w-7 h-7 text-indigo-400 animate-spin" /></div>
-            ) : talks.length > 0 ? (
-              <div className="space-y-3">
-                {talks.map(talk => {
-                  const cat = getCat(talk.category)
-                  return (
-                    <div key={talk.id} className="bg-white border border-gray-200 rounded-xl hover:shadow-md hover:border-gray-300 transition-all cursor-pointer relative group/card"
-                      onClick={() => openDiscussion(talk)}>
-                      <div className="px-6 py-4">
-                        <div className="flex items-start gap-2 mb-2.5 flex-wrap">
-                          <h3 className="text-[15px] font-bold text-gray-900 leading-snug group-hover/card:text-indigo-600 transition-colors">{talk.title}</h3>
-                          <span className={`inline-flex items-center self-center text-[11px] font-bold px-2 py-0.5 rounded-md border flex-shrink-0 ${cat.bg} ${cat.text} ${cat.border}`}>
-                            {talk.category}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[12px] text-gray-400 flex-shrink-0">
-                            By <span className="text-gray-500 font-medium">{talk.user.firstName} {talk.user.lastName}</span>
-                            <span className="mx-1.5">·</span>
-                            {timeAgo(talk.createdAt)}
-                          </span>
-                          <span className="flex-1" />
-                          <span className="flex items-center gap-1 text-[12px] text-gray-400 flex-shrink-0">
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            {talk.responseCount} response{talk.responseCount !== 1 ? 's' : ''}
-                          </span>
-                          <div className="relative flex-shrink-0" data-menu>
-                            <button onClick={e => { e.stopPropagation(); e.preventDefault(); setCardMenuId(cardMenuId === talk.id ? null : talk.id); setThreadMenuOpen(false); setResponseMenuId(null) }}
-                              className="p-1 rounded-lg text-gray-300 hover:text-gray-500 hover:bg-gray-100 transition-all ml-1">
-                              <MoreVertical className="w-[15px] h-[15px]" />
-                            </button>
-                            {cardMenuId === talk.id && (
-                              <div className="absolute top-7 right-0 bg-white border border-gray-200 rounded-xl shadow-xl py-1.5 w-48 z-20" data-menu>
-                                <button onClick={e => { e.stopPropagation(); e.preventDefault(); navigator.clipboard.writeText(`${window.location.origin}/home/campus-talks?thread=${talk.id}`); setCopiedLink(true); setTimeout(() => setCopiedLink(false), 2000); setCardMenuId(null) }}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                                  <Share2 className="w-4 h-4 text-gray-400" /><span>Share Thread</span>
-                                </button>
-                                {talk.userId === user?.id && (
-                                  <>
-                                    <button onClick={e => { e.stopPropagation(); e.preventDefault(); openEditQuestion(talk) }}
-                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                                      <Pencil className="w-4 h-4 text-gray-400" /><span>Edit</span>
-                                    </button>
-                                    <div className="mx-3 my-1 border-t border-gray-100"></div>
-                                    <button onClick={e => { e.stopPropagation(); e.preventDefault(); handleDeleteQuestion(talk.id) }}
-                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                      <Trash2 className="w-4 h-4" /><span>Delete</span>
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+          ) : (
+            <div style={{ background: 'white', borderRadius: 16, border: '1px solid #f3f4f6', padding: '64px', textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, background: '#f3f4f6', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <Megaphone size={20} color="#d1d5db" />
               </div>
-            ) : (
-              <div className="bg-white border border-dashed border-gray-300 rounded-2xl py-16 text-center">
-                <div className="w-14 h-14 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-3"><Megaphone className="w-7 h-7 text-indigo-400" /></div>
-                <p className="text-gray-700 font-semibold mb-1">No discussions yet</p><p className="text-gray-400 text-sm mb-4">Be the first to ask a question!</p>
-                <button onClick={() => setShowAskModal(true)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-semibold text-sm hover:bg-indigo-700 transition-all inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Ask a Question</button>
-              </div>
-            )}
-          </div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: '#374151', margin: '0 0 6px' }}>No discussions yet</p>
+              <p style={{ fontSize: 14, color: '#9ca3af', margin: '0 0 20px' }}>Be the first to ask a question!</p>
+              <button onClick={() => setShowAskModal(true)} style={btnPrimary}>
+                <Plus size={14} /> Ask a Question
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* ASK MODAL */}
       {showAskModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAskModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
-            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Ask a Question</h2>
-              <button onClick={() => setShowAskModal(false)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setShowAskModal(false)}>
+          <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.12)', width: '100%', maxWidth: 520 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Ask a Question</h2>
+              <button onClick={() => setShowAskModal(false)} style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}><X size={16} /></button>
             </div>
-            <div className="px-6 space-y-4">
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Category</label>
-                <div className="relative"><select value={askForm.category} onChange={e => setAskForm(p => ({ ...p, category: e.target.value }))} className="appearance-none w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 cursor-pointer">{DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Category</label>
+                <div style={{ position: 'relative' }}>
+                  <select value={askForm.category} onChange={e => setAskForm(p => ({ ...p, category: e.target.value }))}
+                    style={{ appearance: 'none', width: '100%', padding: '10px 32px 10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, background: 'white', cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+                    {DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDown size={14} color="#9ca3af" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Your Question <span className="text-red-500">*</span></label>
-                <input type="text" value={askForm.title} onChange={e => { setAskForm(p => ({ ...p, title: e.target.value })); if (askErrors.title) setAskErrors({}) }} placeholder="e.g., Best study spots on campus?" className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 ${askErrors.title ? 'border-red-300' : 'border-gray-200'}`} />
-                {askErrors.title && <p className="text-xs text-red-500 mt-1">{askErrors.title}</p>}
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                  Your Question <span style={{ color: '#f87171' }}>*</span>
+                </label>
+                <input type="text" value={askForm.title}
+                  onChange={e => { setAskForm(p => ({ ...p, title: e.target.value })); if (askErrors.title) setAskErrors({}) }}
+                  placeholder="e.g., Best study spots on campus?"
+                  style={{ width: '100%', padding: '10px 14px', border: `1px solid ${askErrors.title ? '#fca5a5' : '#e5e7eb'}`, borderRadius: 8, fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', background: askErrors.title ? '#fef2f2' : 'white' }} />
+                {askErrors.title && <p style={{ fontSize: 12, color: '#f87171', margin: '4px 0 0' }}>{askErrors.title}</p>}
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Details <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
-                <textarea value={askForm.content} onChange={e => setAskForm(p => ({ ...p, content: e.target.value }))} placeholder="Add more context..." rows={3} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                  Details <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+                </label>
+                <textarea value={askForm.content} onChange={e => setAskForm(p => ({ ...p, content: e.target.value }))}
+                  placeholder="Add more context..." rows={3}
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
             </div>
-            <div className="flex gap-3 px-6 py-5">
-              <button onClick={() => { setShowAskModal(false); setAskErrors({}) }} className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold text-sm">Cancel</button>
-              <button onClick={handleAskQuestion} disabled={isPosting} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2">{isPosting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Post</button>
+            <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
+              <button onClick={() => { setShowAskModal(false); setAskErrors({}) }}
+                style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', background: 'white', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#6b7280', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={handleAskQuestion} disabled={isPosting}
+                style={{ flex: 1, padding: '10px', border: 'none', background: '#4f46e5', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: 'inherit', opacity: isPosting ? 0.7 : 1 }}>
+                {isPosting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />} Post
+              </button>
             </div>
           </div>
         </div>
@@ -628,29 +732,43 @@ export default function CampusTalksPage() {
 
       {/* EDIT QUESTION MODAL */}
       {editingQuestion && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditingQuestion(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
-            <div className="px-6 pt-5 pb-3 flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-900">Edit Question</h2>
-              <button onClick={() => setEditingQuestion(null)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400"><X className="w-5 h-5" /></button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setEditingQuestion(null)}>
+          <div style={{ background: 'white', borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.12)', width: '100%', maxWidth: 520 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '20px 24px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6' }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>Edit Question</h2>
+              <button onClick={() => setEditingQuestion(null)} style={{ padding: 6, borderRadius: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}><X size={16} /></button>
             </div>
-            <div className="px-6 space-y-4">
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Category</label>
-                <div className="relative"><select value={editQuestionForm.category} onChange={e => setEditQuestionForm(p => ({ ...p, category: e.target.value }))} className="appearance-none w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 cursor-pointer">{DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select><ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" /></div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Category</label>
+                <div style={{ position: 'relative' }}>
+                  <select value={editQuestionForm.category} onChange={e => setEditQuestionForm(p => ({ ...p, category: e.target.value }))}
+                    style={{ appearance: 'none', width: '100%', padding: '10px 32px 10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, background: 'white', cursor: 'pointer', outline: 'none', fontFamily: 'inherit' }}>
+                    {DEFAULT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDown size={14} color="#9ca3af" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Question <span className="text-red-500">*</span></label>
-                <input type="text" value={editQuestionForm.title} onChange={e => setEditQuestionForm(p => ({ ...p, title: e.target.value }))} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Question <span style={{ color: '#f87171' }}>*</span></label>
+                <input type="text" value={editQuestionForm.title} onChange={e => setEditQuestionForm(p => ({ ...p, title: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Details <span className="text-xs text-gray-400 font-normal">(optional)</span></label>
-                <textarea value={editQuestionForm.content} onChange={e => setEditQuestionForm(p => ({ ...p, content: e.target.value }))} rows={3} className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>Details <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+                <textarea value={editQuestionForm.content} onChange={e => setEditQuestionForm(p => ({ ...p, content: e.target.value }))}
+                  rows={3} style={{ width: '100%', padding: '10px 14px', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 14, outline: 'none', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
               </div>
             </div>
-            <div className="flex gap-3 px-6 py-5">
-              <button onClick={() => setEditingQuestion(null)} className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 font-semibold text-sm">Cancel</button>
-              <button onClick={handleSaveEditQuestion} disabled={isSavingEdit || !editQuestionForm.title.trim()} className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-2">{isSavingEdit ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save Changes</button>
+            <div style={{ padding: '0 24px 24px', display: 'flex', gap: 10 }}>
+              <button onClick={() => setEditingQuestion(null)}
+                style={{ flex: 1, padding: '10px', border: '1px solid #e5e7eb', background: 'white', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#6b7280', fontFamily: 'inherit' }}>Cancel</button>
+              <button onClick={handleSaveEditQuestion} disabled={isSavingEdit || !editQuestionForm.title.trim()}
+                style={{ flex: 1, padding: '10px', border: 'none', background: '#4f46e5', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontFamily: 'inherit', opacity: isSavingEdit || !editQuestionForm.title.trim() ? 0.5 : 1 }}>
+                {isSavingEdit ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />} Save Changes
+              </button>
             </div>
           </div>
         </div>
@@ -658,6 +776,8 @@ export default function CampusTalksPage() {
 
       <ProfileViewModal userId={profileViewUserId} onClose={() => setProfileViewUserId(null)} currentUserId={user?.id}
         onStartDM={(dmUser) => { router.push(`/home?openDM=${dmUser.id}&dmName=${encodeURIComponent(dmUser.firstName + ' ' + dmUser.lastName)}`) }} />
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }

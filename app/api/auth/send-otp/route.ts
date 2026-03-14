@@ -8,6 +8,9 @@ const resolveMx = promisify(dns.resolveMx)
 const prisma = new PrismaClient()
 const resend = new Resend(process.env.RESEND_API_KEY)
 
+// Matches: .edu | .ac.in | .edu.in | .ac.uk | .edu.au
+const VALID_EDU_PATTERN = /^[^\s@]+@[^\s@]+\.(edu|ac\.in|edu\.in|ac\.uk|edu\.au)$/i
+
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
@@ -18,16 +21,10 @@ function buildEmailTemplate(otp: string): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!--
-    Force light mode in ALL email clients that support it.
-    Gmail app, Apple Mail, Outlook — this prevents dark mode inversion.
-  -->
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
   <style>
-    /* Force light mode — prevents email clients from inverting colors */
     :root { color-scheme: light !important; }
-
     body {
       margin: 0 !important;
       padding: 0 !important;
@@ -36,8 +33,6 @@ function buildEmailTemplate(otp: string): string {
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
     }
-
-    /* Override any dark mode media query the email client tries to apply */
     @media (prefers-color-scheme: dark) {
       body { background-color: #f3f4f6 !important; }
       .wrapper { background-color: #f3f4f6 !important; }
@@ -49,32 +44,21 @@ function buildEmailTemplate(otp: string): string {
       .footer-text { color: #9ca3af !important; }
       .header-text { color: #ffffff !important; }
     }
-
-    /* Outlook dark mode */
     [data-ogsc] body { background-color: #f3f4f6 !important; }
     [data-ogsc] .card { background-color: #ffffff !important; }
     [data-ogsc] .otp-code { color: #4f46e5 !important; }
     [data-ogsc] .body-text { color: #374151 !important; }
   </style>
 </head>
-<!--
-  bgcolor on body and table cells is the most reliable fallback
-  for email clients that ignore CSS entirely (older Outlook, etc.)
--->
 <body bgcolor="#f3f4f6" style="margin:0;padding:0;background-color:#f3f4f6;">
   <table class="wrapper" role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#f3f4f6"
     style="background-color:#f3f4f6;width:100%;border-collapse:collapse;">
     <tr>
       <td align="center" style="padding:40px 16px;">
-
-        <!-- Card -->
         <table class="card" role="presentation" width="100%" style="max-width:560px;background-color:#ffffff;border-radius:16px;overflow:hidden;border-collapse:collapse;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-
-          <!-- Header -->
           <tr>
             <td align="center" bgcolor="#4f46e5"
               style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:36px 32px;border-radius:16px 16px 0 0;">
-              <!-- Logo mark -->
               <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 auto 12px;">
                 <tr>
                   <td align="center" bgcolor="#ffffff" width="52" height="52"
@@ -93,8 +77,6 @@ function buildEmailTemplate(otp: string): string {
               </p>
             </td>
           </tr>
-
-          <!-- Body -->
           <tr>
             <td bgcolor="#ffffff" style="background-color:#ffffff;padding:36px 32px 24px;">
               <p class="body-text"
@@ -105,8 +87,6 @@ function buildEmailTemplate(otp: string): string {
                 style="margin:0 0 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#374151;line-height:1.6;">
                 You're one step away from joining your campus community. Use the code below to verify your email address.
               </p>
-
-              <!-- OTP Box -->
               <table class="otp-box" role="presentation" width="100%" cellpadding="0" cellspacing="0"
                 style="border-collapse:collapse;background-color:#eef2ff;border-radius:12px;border:2px solid #4f46e5;margin:0 0 24px;">
                 <tr>
@@ -114,7 +94,6 @@ function buildEmailTemplate(otp: string): string {
                     <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;color:#6366f1;letter-spacing:0.1em;text-transform:uppercase;">
                       Your verification code
                     </p>
-                    <!-- The OTP digits — inline everything for max compatibility -->
                     <p class="otp-code"
                       style="margin:0;font-family:'Courier New',Courier,monospace;font-size:44px;font-weight:900;color:#4f46e5;letter-spacing:12px;line-height:1.2;">
                       ${otp}
@@ -126,7 +105,6 @@ function buildEmailTemplate(otp: string): string {
                   </td>
                 </tr>
               </table>
-
               <p class="muted-text"
                 style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#6b7280;line-height:1.6;">
                 If you didn't request this code, you can safely ignore this email. Your account won't be affected.
@@ -137,15 +115,11 @@ function buildEmailTemplate(otp: string): string {
               </p>
             </td>
           </tr>
-
-          <!-- Divider -->
           <tr>
             <td bgcolor="#ffffff" style="background-color:#ffffff;padding:0 32px;">
               <hr style="border:none;border-top:1px solid #e5e7eb;margin:0;" />
             </td>
           </tr>
-
-          <!-- Footer -->
           <tr>
             <td bgcolor="#ffffff" align="center"
               style="background-color:#ffffff;padding:20px 32px 28px;border-radius:0 0 16px 16px;">
@@ -159,10 +133,7 @@ function buildEmailTemplate(otp: string): string {
               </p>
             </td>
           </tr>
-
         </table>
-        <!-- /Card -->
-
       </td>
     </tr>
   </table>
@@ -176,10 +147,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`📧 OTP request for ${authType}:`, email)
 
-    const eduEmailRegex = /^[^\s@]+@([^\s@]+\.)*[^\s@]+\.edu$/
-    if (!eduEmailRegex.test(email)) {
+    // ── Validate: .edu, .ac.in, .edu.in, .ac.uk, .edu.au ──
+    if (!VALID_EDU_PATTERN.test(email)) {
       return NextResponse.json(
-        { error: 'Please use your university email (.edu)' },
+        { error: 'Please use your university email (.edu, .ac.in, .edu.in, .ac.uk, .edu.au)' },
         { status: 400 }
       )
     }
